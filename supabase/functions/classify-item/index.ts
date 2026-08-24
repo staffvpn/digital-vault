@@ -22,8 +22,14 @@ const TAXONOMY = `
   category — коротко по смыслу сайта.
 - Заметка (текст без ссылки) — type "note", category — короткий Project.
 
+Также ВСЕГДА заполняй "description" — одно короткое предложение на русском
+(до 140 символов) простыми словами о том, что это такое: конкретные имена,
+бренды, тема, что видно на картинке/странице. Это единственное, по чему
+потом можно будет найти вещь в поиске, если название неинформативно —
+пиши так, чтобы поиск по любому упомянутому слову находил её.
+
 Отвечай СТРОГО в формате JSON без пояснений и без markdown:
-{"type":"...","category":"...","subcategory":"...","title":"...","confidence":0.0}
+{"type":"...","category":"...","subcategory":"...","title":"...","description":"...","confidence":0.0}
 `.trim();
 
 // Classification runs through Polza.ai — an OpenAI-compatible proxy that
@@ -163,6 +169,7 @@ Deno.serve(async (req) => {
         tags: [],
         confidence: 0,
         title: linkMeta?.title ?? null,
+        description: linkMeta?.description ?? null,
       },
       source: "fallback",
       linkMeta,

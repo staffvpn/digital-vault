@@ -69,6 +69,7 @@ export interface ClassifyResult {
   category: string | null;
   subcategory?: string | null;
   title: string | null;
+  description?: string | null;
   tags: string[];
   confidence: number;
 }

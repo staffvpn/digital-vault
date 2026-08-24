@@ -37,7 +37,7 @@ export function SearchScreen() {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Найдите что угодно по названию, тегам, категории…"
+            placeholder="Найдите что угодно по названию, описанию, категории…"
             className="flex-1 bg-transparent text-sm text-bone placeholder:text-slate-dim outline-none"
           />
         </form>
@@ -46,8 +46,8 @@ export function SearchScreen() {
           <Card className="flex items-start gap-2.5 p-4">
             <Sparkles size={15} strokeWidth={1.5} className="mt-0.5 shrink-0 text-signal" />
             <p className="text-xs leading-relaxed text-slate">
-              Поиск ищет по названию, описанию, категориям, тегам и распознанному тексту. Семантический поиск по
-              смыслу («тёмный сайт с зелёной кнопкой») доступен на Pro.
+              ИИ сам пишет короткое описание для всего, что вы сохраняете — поиск ищет по названию, описанию,
+              категории и домену, так что найти можно почти по любому слову.
             </p>
           </Card>
         )}

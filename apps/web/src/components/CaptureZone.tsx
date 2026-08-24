@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import clsx from "clsx";
-import { ClipboardPaste, Upload, ShieldAlert, Check, Pencil, X, KeyRound } from "lucide-react";
-import { Button } from "./ui";
+import { ClipboardPaste, Upload, Check, KeyRound } from "lucide-react";
 import { ProcessingReadout } from "./ProcessingReadout";
-import { typeMeta } from "../lib/typeMeta";
 import { classifyContent, createItem, updateItem, uploadFile, createSecret } from "../lib/api";
 import { useToastStore } from "../state/toast";
-import { haptic, hapticNotify } from "../lib/telegram";
+import { hapticNotify } from "../lib/telegram";
 import type { ClassifyResult, ItemType } from "../types";
 
-type Stage = "idle" | "dragging" | "processing" | "result" | "credential" | "uploading";
+// Everything here is designed around one rule: the person never has to
+// confirm, edit, or dismiss anything to get something saved. Paste it, drop
+// it, tap to paste — it's filed the moment the AI (or the local credential
+// heuristic) has an answer. Mistakes get fixed afterwards, from the item's
+// own actions sheet — not gated up front.
+type Stage = "idle" | "dragging" | "processing" | "uploading" | "saved";
 
 interface LinkMeta {
   title: string | null;
@@ -24,6 +27,12 @@ interface Draft {
   mimeType?: string;
   raw: string;
   file?: File;
+}
+
+interface SavedFlash {
+  title: string;
+  sub: string;
+  tone: "success" | "secret";
 }
 
 function isUrl(text: string): boolean {
@@ -50,42 +59,129 @@ function guessCredentialFields(text: string) {
   return { password, username };
 }
 
+// Best-effort name for an auto-saved secret when the pasted text has no
+// explicit "name:" field — a nearby URL's domain is the strongest signal
+// ("github.com ... password: hunter2" -> "github.com").
+function guessSecretName(text: string): string {
+  const url = text.match(/https?:\/\/[^\s]+/i)?.[0];
+  if (url) {
+    try {
+      return new URL(url).hostname.replace(/^www\./, "");
+    } catch {
+      /* fall through */
+    }
+  }
+  const firstLine = text.split(/\r?\n/).find((l) => l.trim().length > 0 && l.trim().length < 60 && !/password|пароль/i.test(l));
+  if (firstLine) return firstLine.trim();
+  return `Секрет · ${new Date().toLocaleDateString("ru-RU")}`;
+}
+
 export function CaptureZone({ onSaved }: { onSaved: () => void }) {
   const [stage, setStage] = useState<Stage>("idle");
-  const [draft, setDraft] = useState<Draft | null>(null);
-  const [result, setResult] = useState<ClassifyResult | null>(null);
-  const [linkMeta, setLinkMeta] = useState<LinkMeta | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [editCategory, setEditCategory] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [credFields, setCredFields] = useState({ name: "", username: "", password: "" });
+  const [savedFlash, setSavedFlash] = useState<SavedFlash | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const push = useToastStore((s) => s.push);
+  const flashTimer = useRef<number | null>(null);
 
-  const runClassification = useCallback(async (d: Draft) => {
-    setDraft(d);
-    setLinkMeta(null);
-    setStage("processing");
-    try {
-      const { result, linkMeta: meta } = await classifyContent({ kind: d.kind, content: d.content, mimeType: d.mimeType });
-      if (meta) setLinkMeta(meta as LinkMeta);
-      if (result.type === "possible_credential") {
-        const guess = guessCredentialFields(d.raw);
-        setCredFields({ name: "", username: guess.username ?? "", password: guess.password ?? "" });
-        setStage("credential");
-        hapticNotify("warning");
-        return;
-      }
-      setResult(result);
-      setEditCategory(result.category ?? "");
-      setStage("result");
-      hapticNotify("success");
-    } catch {
-      setResult({ type: "unknown", category: null, title: null, tags: [], confidence: 0 });
-      setEditCategory("");
-      setStage("result");
-    }
+  useEffect(() => () => {
+    if (flashTimer.current) window.clearTimeout(flashTimer.current);
   }, []);
+
+  const flashSaved = useCallback((flash: SavedFlash) => {
+    setSavedFlash(flash);
+    setStage("saved");
+    hapticNotify("success");
+    onSaved();
+    if (flashTimer.current) window.clearTimeout(flashTimer.current);
+    flashTimer.current = window.setTimeout(() => {
+      setStage((s) => (s === "saved" ? "idle" : s));
+      setSavedFlash(null);
+    }, 1200);
+  }, [onSaved]);
+
+  const autoSaveSecret = useCallback(
+    async (raw: string) => {
+      const guess = guessCredentialFields(raw);
+      const name = guessSecretName(raw);
+      try {
+        await createSecret({
+          name,
+          username: guess.username || undefined,
+          password: guess.password ?? raw.trim(),
+        });
+        flashSaved({ title: name, sub: "В Сейфе · не отправлялось в AI", tone: "secret" });
+      } catch {
+        push("Не удалось сохранить в Сейф", "error");
+        setStage("idle");
+      }
+    },
+    [flashSaved, push],
+  );
+
+  const autoSaveItem = useCallback(
+    async (draft: Draft, result: ClassifyResult, linkMeta: LinkMeta | null) => {
+      try {
+        const title = result.title ?? linkMeta?.title ?? (draft.kind === "text" ? draft.content.slice(0, 80) : null);
+        const description =
+          result.description ?? (draft.kind === "text" ? draft.content : linkMeta?.description ?? null);
+
+        if (draft.kind === "image" && draft.file) {
+          // The image itself was only ever sent to the AI for classification —
+          // actually persist the bytes now, then attach the AI's metadata.
+          const item = await uploadFile(draft.file);
+          await updateItem(item.id, {
+            category: result.category ?? null,
+            subcategory: result.subcategory ?? null,
+            title: title ?? draft.file.name,
+            description,
+            status: "saved",
+            confidence: result.confidence,
+          });
+        } else {
+          await createItem({
+            type: (result.type as ItemType) ?? "text",
+            category: result.category ?? null,
+            subcategory: result.subcategory ?? null,
+            title,
+            description,
+            source_url: draft.kind === "url" ? draft.content : null,
+            source_domain: linkMeta?.domain ?? null,
+            preview_url: linkMeta?.image ?? null,
+            status: "saved",
+            confidence: result.confidence,
+          });
+        }
+        flashSaved({
+          title: title || "Сохранено",
+          sub: result.category ?? "Разобрано и сохранено",
+          tone: "success",
+        });
+      } catch {
+        push("Не удалось сохранить", "error");
+        setStage("idle");
+      }
+    },
+    [flashSaved, push],
+  );
+
+  const runClassification = useCallback(
+    async (d: Draft) => {
+      setStage("processing");
+      try {
+        const { result, linkMeta } = await classifyContent({ kind: d.kind, content: d.content, mimeType: d.mimeType });
+        if (result.type === "possible_credential") {
+          hapticNotify("warning");
+          await autoSaveSecret(d.raw);
+          return;
+        }
+        await autoSaveItem(d, result, (linkMeta as LinkMeta) ?? null);
+      } catch {
+        push("Не удалось распознать содержимое", "error");
+        setStage("idle");
+      }
+    },
+    [autoSaveSecret, autoSaveItem, push],
+  );
 
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
@@ -97,18 +193,16 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
       } else {
         setStage("uploading");
         try {
-          await uploadFile(file);
-          push(`Сохранено: ${file.name}`, "success");
-          hapticNotify("success");
-          onSaved();
-          setStage("idle");
+          const item = await uploadFile(file);
+          await updateItem(item.id, { status: "saved" });
+          flashSaved({ title: file.name, sub: "Сохранено в Файлы", tone: "success" });
         } catch {
           push("Не удалось загрузить файл", "error");
           setStage("idle");
         }
       }
     },
-    [runClassification, onSaved, push],
+    [runClassification, flashSaved, push],
   );
 
   const handleText = useCallback(
@@ -144,16 +238,6 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
   }, [stage, handleFiles, handleText]);
-
-  const reset = () => {
-    setStage("idle");
-    setDraft(null);
-    setResult(null);
-    setLinkMeta(null);
-    setEditing(false);
-    setSaving(false);
-    setCredFields({ name: "", username: "", password: "" });
-  };
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -198,64 +282,6 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
     }
   };
 
-  const handleSave = async () => {
-    if (!result || !draft || saving) return;
-    setSaving(true);
-    haptic("medium");
-    try {
-      if (draft.kind === "image" && draft.file) {
-        // The image itself was only ever sent to the AI for classification —
-        // actually persist the bytes now, then attach the AI's metadata.
-        const item = await uploadFile(draft.file);
-        await updateItem(item.id, {
-          category: editCategory || null,
-          title: result.title ?? draft.file.name,
-          status: "saved",
-          confidence: result.confidence,
-        });
-      } else {
-        await createItem({
-          type: (result.type as ItemType) ?? "text",
-          category: editCategory || null,
-          title: result.title ?? linkMeta?.title ?? (draft.kind === "text" ? draft.content.slice(0, 80) : null),
-          description: draft.kind === "text" ? draft.content : linkMeta?.description ?? null,
-          source_url: draft.kind === "url" ? draft.content : null,
-          source_domain: linkMeta?.domain ?? null,
-          preview_url: linkMeta?.image ?? null,
-          status: "saved",
-          confidence: result.confidence,
-        });
-      }
-      push("Сохранено", "success");
-      onSaved();
-      reset();
-    } catch {
-      push("Не удалось сохранить", "error");
-      setSaving(false);
-    }
-  };
-
-  const handleSaveSecret = async () => {
-    if (!credFields.name || !credFields.password) {
-      push("Укажите название и пароль", "error");
-      return;
-    }
-    try {
-      await createSecret({
-        name: credFields.name,
-        username: credFields.username || undefined,
-        password: credFields.password,
-      });
-      push("Сохранено в Сейф", "success");
-      hapticNotify("success");
-      reset();
-    } catch {
-      push("Не удалось сохранить секрет", "error");
-    }
-  };
-
-  const lowConfidence = result && (!result.category || result.confidence < 0.4);
-
   const idleStage = stage === "idle" || stage === "dragging";
   const dragging = stage === "dragging";
 
@@ -280,7 +306,7 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
           dragging ? "border-signal-dim/70" : "border-hairline",
         )}
       >
-        {/* thin flowing duotone accent — signal teal through deep indigo to void and back */}
+        {/* thin flowing accent — the app's own signal blue, dim to bright and back */}
         <div className={clsx("aurora-flow h-[2px] w-full", dragging && "aurora-flow-fast")} />
 
         <div className="relative p-5">
@@ -321,76 +347,35 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
           )}
 
           {stage === "uploading" && (
-        <div className="flex flex-col items-center gap-3 py-10">
-          <ProcessingReadout label="ЗАГРУЗКА" />
-        </div>
-      )}
-
-      {stage === "processing" && (
-        <div className="flex flex-col items-center gap-3 py-10">
-          <ProcessingReadout label="АНАЛИЗ" />
-        </div>
-      )}
-
-      {stage === "credential" && (
-        <div className="space-y-4 py-2">
-          <div className="flex items-start gap-2.5 rounded-md border border-ember/30 bg-ember/5 px-3 py-2.5">
-            <ShieldAlert size={16} strokeWidth={1.5} className="mt-0.5 shrink-0 text-ember" />
-            <div className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-wider text-ember">Похоже на пароль</p>
-              <p className="text-xs text-slate leading-relaxed">
-                Похоже на логин/пароль или ключ. Мы не отправляли это в AI — сохраним прямо в Сейф.
-              </p>
+            <div className="flex flex-col items-center gap-3 py-10">
+              <ProcessingReadout label="ЗАГРУЗКА" />
             </div>
-          </div>
-          <div className="space-y-2.5">
-            <input
-              value={credFields.name}
-              onChange={(e) => setCredFields((f) => ({ ...f, name: e.target.value }))}
-              placeholder="Название (например GitHub)"
-              className="w-full rounded-md border border-hairline bg-graphite-raised px-3 py-2 text-sm text-bone placeholder:text-slate-dim outline-none focus:border-signal-dim"
-            />
-            <input
-              value={credFields.username}
-              onChange={(e) => setCredFields((f) => ({ ...f, username: e.target.value }))}
-              placeholder="Логин / email"
-              className="w-full rounded-md border border-hairline bg-graphite-raised px-3 py-2 text-sm text-bone placeholder:text-slate-dim outline-none focus:border-signal-dim"
-            />
-            <input
-              value={credFields.password}
-              onChange={(e) => setCredFields((f) => ({ ...f, password: e.target.value }))}
-              placeholder="Пароль"
-              type="password"
-              className="w-full rounded-md border border-hairline bg-graphite-raised px-3 py-2 text-sm text-bone placeholder:text-slate-dim outline-none focus:border-signal-dim"
-            />
-          </div>
-          <div className="flex gap-2">
-            <Button variant="secondary" className="flex-1" onClick={reset}>
-              Отмена
-            </Button>
-            <Button variant="signal" className="flex-1" onClick={handleSaveSecret}>
-              <KeyRound size={14} strokeWidth={1.5} />
-              Сохранить безопасно
-            </Button>
-          </div>
-        </div>
-      )}
+          )}
 
-      {stage === "result" && result && draft && (
-        <ResultCard
-          result={result}
-          draft={draft}
-          linkMeta={linkMeta}
-          lowConfidence={Boolean(lowConfidence)}
-          editing={editing}
-          editCategory={editCategory}
-          saving={saving}
-          setEditCategory={setEditCategory}
-          setEditing={setEditing}
-          onSave={handleSave}
-          onCancel={reset}
-        />
-      )}
+          {stage === "processing" && (
+            <div className="flex flex-col items-center gap-3 py-10">
+              <ProcessingReadout label="АНАЛИЗ" />
+            </div>
+          )}
+
+          {stage === "saved" && savedFlash && (
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+              <div
+                className={clsx(
+                  "flex h-11 w-11 items-center justify-center rounded-full border",
+                  savedFlash.tone === "secret" ? "border-signal-dim/60 bg-signal/10 text-signal" : "border-moss/40 bg-moss/10 text-moss",
+                )}
+              >
+                {savedFlash.tone === "secret" ? (
+                  <KeyRound size={18} strokeWidth={2} />
+                ) : (
+                  <Check size={20} strokeWidth={2} />
+                )}
+              </div>
+              <p className="max-w-[240px] truncate text-sm font-medium text-bone">{savedFlash.title}</p>
+              <p className="text-xs text-slate">{savedFlash.sub}</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -420,100 +405,5 @@ function CornerBracket({
         active ? "border-signal" : "border-hairline-strong",
       )}
     />
-  );
-}
-
-function ResultCard({
-  result,
-  draft,
-  linkMeta,
-  lowConfidence,
-  editing,
-  editCategory,
-  saving,
-  setEditCategory,
-  setEditing,
-  onSave,
-  onCancel,
-}: {
-  result: ClassifyResult;
-  draft: Draft;
-  linkMeta: LinkMeta | null;
-  lowConfidence: boolean;
-  editing: boolean;
-  editCategory: string;
-  saving: boolean;
-  setEditCategory: (v: string) => void;
-  setEditing: (v: boolean) => void;
-  onSave: () => void;
-  onCancel: () => void;
-}) {
-  const meta = typeMeta((result.type as ItemType) ?? "text");
-  const Icon = meta.icon;
-  const previewSrc = draft.kind === "image" ? `data:${draft.mimeType};base64,${draft.content}` : linkMeta?.image;
-
-  return (
-    <div className="space-y-4 py-1">
-      <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-moss">
-        <Check size={13} strokeWidth={2} />
-        НАЙДЕНО
-      </div>
-
-      {previewSrc && (
-        <div className="overflow-hidden rounded-md border border-hairline bg-graphite-raised">
-          <img src={previewSrc} alt="" className="max-h-40 w-full object-cover" />
-        </div>
-      )}
-
-      <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-hairline bg-graphite-raised text-signal">
-          <Icon size={18} strokeWidth={1.5} />
-        </div>
-        <div className="min-w-0 space-y-1">
-          <p className="text-sm font-medium text-bone">{result.title ?? linkMeta?.title ?? meta.label}</p>
-          {draft.kind === "url" && (
-            <p className="truncate text-xs text-slate">{new URL(draft.content).hostname.replace(/^www\./, "")}</p>
-          )}
-          {draft.kind === "text" && <p className="line-clamp-2 text-xs text-slate">{draft.content}</p>}
-        </div>
-      </div>
-
-      {lowConfidence ? (
-        <div className="rounded-md border border-hairline bg-graphite-raised px-3 py-2 text-xs text-slate">
-          Не удалось уверенно определить категорию — выберите вручную.
-        </div>
-      ) : (
-        <div className="space-y-1.5">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-slate-dim">Категория</p>
-          <p className="text-sm text-bone">{[result.category, result.subcategory].filter(Boolean).join(" / ") || "—"}</p>
-        </div>
-      )}
-
-      {editing && (
-        <input
-          value={editCategory}
-          onChange={(e) => setEditCategory(e.target.value)}
-          placeholder="Категория"
-          className="w-full rounded-md border border-hairline bg-graphite-raised px-3 py-2 text-sm text-bone placeholder:text-slate-dim outline-none focus:border-signal-dim"
-        />
-      )}
-
-      <div className="flex gap-2">
-        <Button variant="secondary" className="w-9 shrink-0 px-0" onClick={onCancel} aria-label="Отменить">
-          <X size={16} strokeWidth={1.5} />
-        </Button>
-        <Button
-          variant="secondary"
-          className="flex-1"
-          onClick={() => setEditing(!editing)}
-        >
-          <Pencil size={14} strokeWidth={1.5} />
-          {editing ? "Готово" : "Изменить"}
-        </Button>
-        <Button variant="primary" className="flex-1" onClick={onSave} disabled={saving || (lowConfidence && !editCategory)}>
-          {saving ? "Сохраняем…" : "Сохранить"}
-        </Button>
-      </div>
-    </div>
   );
 }

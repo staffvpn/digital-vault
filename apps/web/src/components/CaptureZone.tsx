@@ -257,17 +257,17 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
   const lowConfidence = result && (!result.category || result.confidence < 0.4);
 
   const idleStage = stage === "idle" || stage === "dragging";
+  const dragging = stage === "dragging";
 
   return (
-    <div className="relative">
-      {/* soft ambient glow behind the frame — same flowing gradient, blurred */}
-      <div
-        aria-hidden
-        className={clsx(
-          "aurora-flow pointer-events-none absolute -inset-4 -z-10 rounded-[34px] blur-2xl transition-opacity duration-300",
-          stage === "dragging" ? "aurora-flow-fast opacity-70" : "opacity-30",
-        )}
-      />
+    <div className="relative p-1">
+      {/* Viewfinder-style corner brackets — not decorative gloss, reads as
+          "instrument", matches the rest of the app's terminal/vault motifs. */}
+      <CornerBracket corner="top-left" active={dragging} />
+      <CornerBracket corner="top-right" active={dragging} />
+      <CornerBracket corner="bottom-left" active={dragging} />
+      <CornerBracket corner="bottom-right" active={dragging} />
+
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -276,12 +276,15 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
         onDragLeave={() => stage === "dragging" && setStage("idle")}
         onDrop={onDrop}
         className={clsx(
-          "aurora-flow relative overflow-hidden rounded-[26px] p-[1.5px] transition-all duration-300",
-          stage === "dragging" && "aurora-flow-fast",
+          "relative overflow-hidden rounded-lg border bg-graphite transition-colors duration-300",
+          dragging ? "border-signal-dim/70" : "border-hairline",
         )}
       >
-        <div className="relative overflow-hidden rounded-[24px] bg-graphite p-5">
-          {stage === "dragging" && (
+        {/* thin flowing duotone accent — signal teal through deep indigo to void and back */}
+        <div className={clsx("aurora-flow h-[2px] w-full", dragging && "aurora-flow-fast")} />
+
+        <div className="relative p-5">
+          {dragging && (
             <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-signal/60 animate-scanline" />
           )}
 
@@ -290,10 +293,8 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
               onClick={tryClipboardTap}
               className="flex cursor-pointer flex-col items-center gap-3.5 py-9 text-center"
             >
-              <div className="aurora-flow flex h-16 w-16 items-center justify-center rounded-2xl p-[1.5px]">
-                <div className="flex h-full w-full items-center justify-center rounded-2xl bg-graphite-raised text-signal">
-                  <ClipboardPaste size={24} strokeWidth={1.5} />
-                </div>
+              <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-hairline-strong bg-graphite-raised text-signal shadow-[0_0_0_1px_rgba(79,182,214,0.08)]">
+                <ClipboardPaste size={22} strokeWidth={1.5} />
               </div>
               <p className="text-base font-medium text-bone">
                 Нажмите, чтобы вставить, <br className="sm:hidden" />
@@ -393,6 +394,32 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
         </div>
       </div>
     </div>
+  );
+}
+
+const BRACKET_POSITION: Record<string, string> = {
+  "top-left": "left-0 top-0 rounded-tl-lg border-l-2 border-t-2",
+  "top-right": "right-0 top-0 rounded-tr-lg border-r-2 border-t-2",
+  "bottom-left": "left-0 bottom-0 rounded-bl-lg border-l-2 border-b-2",
+  "bottom-right": "right-0 bottom-0 rounded-br-lg border-r-2 border-b-2",
+};
+
+function CornerBracket({
+  corner,
+  active,
+}: {
+  corner: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+  active: boolean;
+}) {
+  return (
+    <div
+      aria-hidden
+      className={clsx(
+        "pointer-events-none absolute h-3.5 w-3.5 transition-colors duration-300",
+        BRACKET_POSITION[corner],
+        active ? "border-signal" : "border-hairline-strong",
+      )}
+    />
   );
 }
 

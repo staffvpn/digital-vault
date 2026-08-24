@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { MoreHorizontal, Check } from "lucide-react";
 import { typeMeta } from "../lib/typeMeta";
 import { relativeDate } from "../lib/format";
-import { openExternalLink, haptic } from "../lib/telegram";
+import { haptic } from "../lib/telegram";
+import { isOpenable, openItemContent } from "../lib/openItem";
+import { useToastStore } from "../state/toast";
 import type { VaultItem } from "../types";
 
 export function ItemRow({
@@ -15,13 +18,23 @@ export function ItemRow({
 }) {
   const meta = typeMeta(item.type);
   const Icon = meta.icon;
+  const [opening, setOpening] = useState(false);
+  const push = useToastStore((s) => s.push);
 
-  const handlePrimaryTap = () => {
-    if (item.source_url) {
-      haptic("light");
-      openExternalLink(item.source_url);
-    } else {
+  const handlePrimaryTap = async () => {
+    if (!isOpenable(item)) {
       onOpen();
+      return;
+    }
+    if (opening) return;
+    haptic("light");
+    setOpening(true);
+    try {
+      await openItemContent(item);
+    } catch {
+      push("Не удалось открыть", "error");
+    } finally {
+      setOpening(false);
     }
   };
 
@@ -35,7 +48,7 @@ export function ItemRow({
           {item.title || item.source_domain || meta.label}
         </span>
         <span className="flex w-full items-center gap-1.5 text-xs text-slate">
-          <span className="shrink-0">{meta.label}</span>
+          <span className="shrink-0">{opening ? "Открываем…" : meta.label}</span>
           {item.category && (
             <>
               <span className="shrink-0 text-hairline-strong">·</span>

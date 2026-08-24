@@ -1,18 +1,32 @@
+import { useState } from "react";
 import { MoreHorizontal } from "lucide-react";
 import { typeMeta } from "../lib/typeMeta";
-import { openExternalLink, haptic } from "../lib/telegram";
+import { haptic } from "../lib/telegram";
+import { isOpenable, openItemContent } from "../lib/openItem";
+import { useToastStore } from "../state/toast";
 import type { VaultItem } from "../types";
 
 export function ItemVisualCard({ item, onOpen }: { item: VaultItem; onOpen: () => void }) {
   const meta = typeMeta(item.type);
   const Icon = meta.icon;
+  const [opening, setOpening] = useState(false);
+  const push = useToastStore((s) => s.push);
+  const openable = isOpenable(item);
 
-  const handlePrimaryTap = () => {
-    if (item.source_url) {
-      haptic("light");
-      openExternalLink(item.source_url);
-    } else {
+  const handlePrimaryTap = async () => {
+    if (!openable) {
       onOpen();
+      return;
+    }
+    if (opening) return;
+    haptic("light");
+    setOpening(true);
+    try {
+      await openItemContent(item);
+    } catch {
+      push("Не удалось открыть", "error");
+    } finally {
+      setOpening(false);
     }
   };
 
@@ -28,10 +42,12 @@ export function ItemVisualCard({ item, onOpen }: { item: VaultItem; onOpen: () =
         </div>
         <div className="space-y-1 p-2.5">
           <p className="truncate text-xs font-medium text-bone">{item.title || meta.label}</p>
-          <p className="truncate text-[11px] text-slate">{item.source_domain || item.category || " "}</p>
+          <p className="truncate text-[11px] text-slate">
+            {opening ? "Открываем…" : item.source_domain || item.category || " "}
+          </p>
         </div>
       </button>
-      {item.source_url && (
+      {openable && (
         <button
           onClick={onOpen}
           aria-label="Действия"

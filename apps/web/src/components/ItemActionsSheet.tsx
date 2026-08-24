@@ -3,7 +3,8 @@ import { Trash2, Check, ExternalLink } from "lucide-react";
 import { Sheet } from "./Sheet";
 import { Button } from "./ui";
 import { deleteItem, updateItem } from "../lib/api";
-import { openExternalLink, haptic } from "../lib/telegram";
+import { haptic } from "../lib/telegram";
+import { isOpenable, openItemContent } from "../lib/openItem";
 import { useToastStore } from "../state/toast";
 import type { VaultItem } from "../types";
 
@@ -19,6 +20,7 @@ export function ItemActionsSheet({
   onChanged: () => void;
 }) {
   const [category, setCategory] = useState("");
+  const [opening, setOpening] = useState(false);
   const push = useToastStore((s) => s.push);
 
   useEffect(() => {
@@ -54,19 +56,26 @@ export function ItemActionsSheet({
     }
   };
 
-  const openLink = () => {
-    if (!item.source_url) return;
+  const openLink = async () => {
+    if (opening) return;
     haptic("light");
-    openExternalLink(item.source_url);
+    setOpening(true);
+    try {
+      await openItemContent(item);
+    } catch {
+      push("Не удалось открыть", "error");
+    } finally {
+      setOpening(false);
+    }
   };
 
   return (
     <Sheet open={open} onClose={onClose} title={item.title ?? "Без названия"}>
       <div className="space-y-3">
-        {item.source_url && (
-          <Button variant="secondary" onClick={openLink} className="w-full">
+        {isOpenable(item) && (
+          <Button variant="secondary" onClick={openLink} className="w-full" disabled={opening}>
             <ExternalLink size={14} strokeWidth={1.5} />
-            Открыть ссылку
+            {opening ? "Открываем…" : item.source_url ? "Открыть ссылку" : "Открыть"}
           </Button>
         )}
         <div className="space-y-1.5">

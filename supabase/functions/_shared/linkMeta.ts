@@ -46,11 +46,14 @@ async function fetchYoutubeOembed(targetUrl: string, domain: string): Promise<Li
 
 // A screenshot of the actual page communicates "what site is this" far
 // better than text ever does — but plenty of sites either have no og:image
-// or block scraping entirely. mshots is a free, keyless screenshot service
-// (used by Jetpack/WordPress.com) that renders any URL on demand and caches
-// the result, so it works as a universal fallback with zero setup.
-function mshotsFallback(targetUrl: string): string {
-  return `https://s.wordpress.com/mshots/v1/${encodeURIComponent(targetUrl)}?w=640`;
+// or block scraping entirely. thum.io is a free, keyless screenshot service
+// that renders any URL on demand and caches the result client-side, so it
+// works as a universal fallback with zero setup. (s.wordpress.com/mshots was
+// tried first but is unreachable/very slow from Russian networks, which is
+// exactly where this app's users are — the image just silently failed to
+// load for them, so it was swapped out.)
+function screenshotFallback(targetUrl: string): string {
+  return `https://image.thum.io/get/width/640/noanimate/${targetUrl}`;
 }
 
 export async function fetchLinkMeta(targetUrl: string): Promise<LinkMeta> {
@@ -76,8 +79,8 @@ export async function fetchLinkMeta(targetUrl: string): Promise<LinkMeta> {
         image = null;
       }
     }
-    return { title, description, image: image ?? mshotsFallback(targetUrl), domain };
+    return { title, description, image: image ?? screenshotFallback(targetUrl), domain };
   } catch {
-    return { title: null, description: null, image: mshotsFallback(targetUrl), domain };
+    return { title: null, description: null, image: screenshotFallback(targetUrl), domain };
   }
 }

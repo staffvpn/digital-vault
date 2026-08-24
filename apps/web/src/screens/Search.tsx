@@ -30,7 +30,7 @@ export function SearchScreen() {
 
   return (
     <div className="mx-auto min-h-screen max-w-md pb-24">
-      <Header title="Search" eyebrow="Digital Vault" />
+      <Header title="Поиск" eyebrow="Личное хранилище" />
       <main className="space-y-4 px-4 pt-4">
         <form onSubmit={submit} className="flex items-center gap-2 rounded-md border border-hairline bg-graphite-raised px-3 py-2.5">
           <SearchIcon size={15} strokeWidth={1.5} className="text-slate-dim" />

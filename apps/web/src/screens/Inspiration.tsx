@@ -22,7 +22,7 @@ export function InspirationScreen() {
 
   return (
     <div className="mx-auto min-h-screen max-w-md pb-24">
-      <Header title="Inspiration" eyebrow="Library" back />
+      <Header title="Насмотренность" eyebrow="Библиотека" back />
       <main className="px-4 pt-4">
         {isLoading && (
           <div className="grid grid-cols-2 gap-3">

@@ -46,7 +46,7 @@ export function NotesScreen() {
 
   return (
     <div className="mx-auto min-h-screen max-w-md pb-24">
-      <Header title="Notes" eyebrow="Library" back />
+      <Header title="Заметки" eyebrow="Библиотека" back />
       <main className="space-y-4 px-4 pt-4">
         <Card className="p-2">
           <div className="flex items-end gap-2">

@@ -40,7 +40,7 @@ export function MoviesScreen() {
 
   return (
     <div className="mx-auto min-h-screen max-w-md pb-24">
-      <Header title="Movies & Series" eyebrow="Library" back />
+      <Header title="Фильмы и сериалы" eyebrow="Библиотека" back />
       <main className="space-y-4 px-4 pt-4">
         <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
           {TABS.map((t) => (
@@ -75,7 +75,7 @@ export function MoviesScreen() {
 
         {!isLoading && !isError && filtered.length === 0 && (
           <Card>
-            <EmptyState icon={<Clapperboard size={22} strokeWidth={1.5} />} title="Пока пусто" description="Вставьте ссылку на фильм или сериал в Inbox." />
+            <EmptyState icon={<Clapperboard size={22} strokeWidth={1.5} />} title="Пока пусто" description="Вставьте ссылку на фильм или сериал во Входящие." />
           </Card>
         )}
 

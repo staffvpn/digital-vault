@@ -5,19 +5,19 @@ import { BottomNav } from "../components/BottomNav";
 import { Card } from "../components/ui";
 
 const sections = [
-  { to: "/library/inspiration", label: "Inspiration", desc: "Референсы и насмотренность", icon: Palette },
-  { to: "/library/bookmarks", label: "Bookmarks", desc: "Сохранённые ссылки", icon: Bookmark },
-  { to: "/library/movies", label: "Movies", desc: "Фильмы и сериалы", icon: Clapperboard },
-  { to: "/library/services", label: "Services", desc: "Полезные сайты и инструменты", icon: Wrench },
-  { to: "/library/files", label: "Files", desc: "Документы и изображения", icon: FolderOpen },
-  { to: "/library/notes", label: "Notes", desc: "Быстрые заметки", icon: StickyNote },
+  { to: "/library/inspiration", label: "Насмотренность", desc: "Референсы и вдохновение", icon: Palette },
+  { to: "/library/bookmarks", label: "Закладки", desc: "Сохранённые ссылки", icon: Bookmark },
+  { to: "/library/movies", label: "Фильмы", desc: "Фильмы и сериалы", icon: Clapperboard },
+  { to: "/library/services", label: "Сервисы", desc: "Полезные сайты и инструменты", icon: Wrench },
+  { to: "/library/files", label: "Файлы", desc: "Документы и изображения", icon: FolderOpen },
+  { to: "/library/notes", label: "Заметки", desc: "Быстрые заметки", icon: StickyNote },
 ];
 
 export function LibraryHub() {
   const navigate = useNavigate();
   return (
     <div className="mx-auto min-h-screen max-w-md pb-24">
-      <Header title="Library" eyebrow="Digital Vault" />
+      <Header title="Библиотека" eyebrow="Личное хранилище" />
       <main className="grid grid-cols-2 gap-3 px-4 pt-4">
         {sections.map(({ to, label, desc, icon: Icon }) => (
           <Card

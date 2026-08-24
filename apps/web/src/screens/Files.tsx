@@ -54,8 +54,8 @@ export function FilesScreen() {
   return (
     <div className="mx-auto min-h-screen max-w-md pb-24">
       <Header
-        title="Files"
-        eyebrow="Library"
+        title="Файлы"
+        eyebrow="Библиотека"
         back
         right={
           <IconButton onClick={() => inputRef.current?.click()} aria-label="Загрузить файл" disabled={uploading}>
@@ -67,7 +67,7 @@ export function FilesScreen() {
       <main className="space-y-4 px-4 pt-4">
         <Card className="space-y-2 p-4">
           <div className="flex items-center justify-between">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-slate-dim">Storage</p>
+            <p className="text-[11px] font-medium uppercase tracking-wider text-slate-dim">Хранилище</p>
             <p className="font-mono text-xs text-slate tabular">
               {formatBytes(used)} / {formatBytes(limit)}
             </p>
@@ -85,7 +85,7 @@ export function FilesScreen() {
             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-graphite-raised">
               <div className="h-full w-1/2 animate-pulse rounded-full bg-signal" />
             </div>
-            <span className="font-mono text-[11px] text-slate">UPLOADING</span>
+            <span className="font-mono text-[11px] text-slate">ЗАГРУЗКА</span>
           </Card>
         )}
 
@@ -109,7 +109,7 @@ export function FilesScreen() {
         )}
         {!isLoading && !isError && data?.length === 0 && (
           <Card>
-            <EmptyState icon={<FolderOpen size={22} strokeWidth={1.5} />} title="Пока пусто" description="Загрузите файл или перетащите его в Inbox." />
+            <EmptyState icon={<FolderOpen size={22} strokeWidth={1.5} />} title="Пока пусто" description="Загрузите файл или перетащите его во Входящие." />
           </Card>
         )}
         {!isLoading && !isError && data && data.length > 0 && (

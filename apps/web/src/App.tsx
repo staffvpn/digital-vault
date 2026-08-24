@@ -34,7 +34,7 @@ function AuthGate() {
 
       {(status === "idle" || status === "authenticating") && (
         <>
-          <ProcessingReadout label="CONNECTING" />
+          <ProcessingReadout label="ПОДКЛЮЧЕНИЕ" />
           <p className="text-xs text-slate-dim">Проверяем сессию Telegram…</p>
         </>
       )}

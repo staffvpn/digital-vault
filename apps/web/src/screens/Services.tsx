@@ -22,7 +22,7 @@ export function ServicesScreen() {
 
   return (
     <div className="mx-auto min-h-screen max-w-md pb-24">
-      <Header title="Services" eyebrow="Library" back />
+      <Header title="Сервисы" eyebrow="Библиотека" back />
       <main className="px-4 pt-4">
         {isLoading && (
           <Card className="divide-y divide-hairline p-0">

@@ -50,7 +50,7 @@ export function ItemRow({
           className="flex h-8 shrink-0 items-center gap-1 rounded-md border border-moss/30 px-2.5 text-xs font-medium text-moss transition-colors hover:bg-moss/10"
         >
           <Check size={13} strokeWidth={2} />
-          Save
+          Сохранить
         </button>
       ) : (
         <button onClick={onOpen} className="shrink-0 p-1 text-slate-dim transition-colors hover:text-bone">

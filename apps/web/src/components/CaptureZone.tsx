@@ -190,7 +190,7 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
         username: credFields.username || undefined,
         password: credFields.password,
       });
-      push("Сохранено в Secure Vault", "success");
+      push("Сохранено в Сейф", "success");
       hapticNotify("success");
       reset();
     } catch {
@@ -223,14 +223,14 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
             <ClipboardPaste size={20} strokeWidth={1.5} />
           </div>
           <div className="space-y-1.5">
-            <h2 className="text-xl font-semibold tracking-tight text-bone">SAVE ANYTHING</h2>
+            <h2 className="text-xl font-semibold tracking-tight text-bone">СОХРАНИ ЧТО УГОДНО</h2>
             <p className="text-sm text-slate">
               Перетащи сюда <br className="sm:hidden" />
               или нажми Ctrl + V
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-1.5">
-            {["Link", "Text", "Image", "File", "Secret"].map((t, i) => (
+            {["Ссылка", "Текст", "Фото", "Файл", "Секрет"].map((t, i) => (
               <span key={t} className="flex items-center gap-1.5 text-[11px] text-slate-dim">
                 {i > 0 && <span className="text-hairline-strong">·</span>}
                 {t}
@@ -261,7 +261,7 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
 
       {stage === "processing" && (
         <div className="flex flex-col items-center gap-3 py-10">
-          <ProcessingReadout label="ANALYZING" />
+          <ProcessingReadout label="АНАЛИЗ" />
         </div>
       )}
 
@@ -270,9 +270,9 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
           <div className="flex items-start gap-2.5 rounded-md border border-ember/30 bg-ember/5 px-3 py-2.5">
             <ShieldAlert size={16} strokeWidth={1.5} className="mt-0.5 shrink-0 text-ember" />
             <div className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-wider text-ember">Possible credential</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-ember">Похоже на пароль</p>
               <p className="text-xs text-slate leading-relaxed">
-                Похоже на логин/пароль или ключ. Мы не отправляли это в AI — сохраним прямо в Secure Vault.
+                Похоже на логин/пароль или ключ. Мы не отправляли это в AI — сохраним прямо в Сейф.
               </p>
             </div>
           </div>
@@ -299,11 +299,11 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
           </div>
           <div className="flex gap-2">
             <Button variant="secondary" className="flex-1" onClick={reset}>
-              Cancel
+              Отмена
             </Button>
             <Button variant="signal" className="flex-1" onClick={handleSaveSecret}>
               <KeyRound size={14} strokeWidth={1.5} />
-              Save securely
+              Сохранить безопасно
             </Button>
           </div>
         </div>
@@ -360,7 +360,7 @@ function ResultCard({
     <div className="space-y-4 py-1">
       <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-moss">
         <Check size={13} strokeWidth={2} />
-        FOUND
+        НАЙДЕНО
       </div>
 
       <div className="flex items-start gap-3">
@@ -382,7 +382,7 @@ function ResultCard({
         </div>
       ) : (
         <div className="space-y-1.5">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-slate-dim">Category</p>
+          <p className="text-[10px] font-medium uppercase tracking-wider text-slate-dim">Категория</p>
           <p className="text-sm text-bone">{[result.category, result.subcategory].filter(Boolean).join(" / ") || "—"}</p>
         </div>
       )}
@@ -426,10 +426,10 @@ function ResultCard({
           onClick={() => setEditing(!editing)}
         >
           <Pencil size={14} strokeWidth={1.5} />
-          {editing ? "Готово" : "Edit"}
+          {editing ? "Готово" : "Изменить"}
         </Button>
         <Button variant="primary" className="flex-1" onClick={onSave} disabled={lowConfidence && !editCategory}>
-          Save
+          Сохранить
         </Button>
       </div>
     </div>

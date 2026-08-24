@@ -86,7 +86,7 @@ export function SecretDetailSheet({
 
         {secret.username && (
           <div className="space-y-1.5">
-            <label className="text-[10px] font-medium uppercase tracking-wider text-slate-dim">Username</label>
+            <label className="text-[10px] font-medium uppercase tracking-wider text-slate-dim">Логин</label>
             <div className="flex items-center gap-2 rounded-md border border-vault-border bg-vault-surface px-3 py-2.5">
               <span className="flex-1 truncate text-sm text-bone font-mono">{secret.username}</span>
               <button onClick={() => copy(secret.username!, "Логин")} className="text-slate-dim hover:text-bone">
@@ -97,7 +97,7 @@ export function SecretDetailSheet({
         )}
 
         <div className="space-y-1.5">
-          <label className="text-[10px] font-medium uppercase tracking-wider text-slate-dim">Password</label>
+          <label className="text-[10px] font-medium uppercase tracking-wider text-slate-dim">Пароль</label>
           <div className="flex items-center gap-2 rounded-md border border-vault-border bg-vault-surface px-3 py-2.5">
             <span className="flex-1 truncate font-mono text-sm text-bone">
               {revealed ? revealed : "••••••••••••"}

@@ -22,7 +22,7 @@ export function BookmarksScreen() {
 
   return (
     <div className="mx-auto min-h-screen max-w-md pb-24">
-      <Header title="Bookmarks" eyebrow="Library" back />
+      <Header title="Закладки" eyebrow="Библиотека" back />
       <main className="px-4 pt-4">
         {isLoading && (
           <Card className="divide-y divide-hairline p-0">

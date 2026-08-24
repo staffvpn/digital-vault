@@ -38,7 +38,7 @@ export function AddSecretSheet({
     try {
       await createSecret({ name, username: username || undefined, password, category: category || undefined });
       hapticNotify("success");
-      push("Сохранено в Secure Vault", "success");
+      push("Сохранено в Сейф", "success");
       reset();
       onCreated();
       onClose();
@@ -79,7 +79,7 @@ export function AddSecretSheet({
         />
         <Button variant="signal" onClick={submit} disabled={busy} className="w-full">
           <KeyRound size={14} strokeWidth={1.5} />
-          Save securely
+          Сохранить безопасно
         </Button>
       </div>
     </Sheet>

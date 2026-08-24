@@ -38,7 +38,7 @@ export function VaultScreen() {
   return (
     <div className="mx-auto min-h-screen max-w-md pb-24">
       <Header
-        title="Secure Vault"
+        title="Сейф"
         eyebrow="Зашифровано на сервере"
         right={
           <IconButton onClick={() => setAdding(true)} aria-label="Добавить секрет">
@@ -58,7 +58,7 @@ export function VaultScreen() {
         </div>
 
         <p className="px-1 text-[11px] font-medium uppercase tracking-wider text-slate-dim">
-          {data ? `${data.length} secrets` : "…"}
+          {data ? `Секретов: ${data.length}` : "…"}
         </p>
 
         {isLoading && (
@@ -77,7 +77,7 @@ export function VaultScreen() {
 
         {isError && (
           <Card className="border-vault-border bg-vault-surface">
-            <ErrorState title="Не удалось загрузить Vault" onRetry={() => refetch()} />
+            <ErrorState title="Не удалось загрузить Сейф" onRetry={() => refetch()} />
           </Card>
         )}
 
@@ -85,7 +85,7 @@ export function VaultScreen() {
           <Card className="border-vault-border bg-vault-surface">
             <EmptyState
               icon={<ShieldCheck size={22} strokeWidth={1.5} />}
-              title={query ? "Ничего не найдено" : "Vault пуст"}
+              title={query ? "Ничего не найдено" : "Сейф пуст"}
               description={
                 query
                   ? "Попробуйте другой запрос."

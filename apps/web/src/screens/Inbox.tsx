@@ -34,13 +34,13 @@ export function InboxScreen() {
 
   return (
     <div className="mx-auto min-h-screen max-w-md pb-24">
-      <Header title="Inbox" eyebrow="Digital Vault" />
+      <Header title="Входящие" eyebrow="Личное хранилище" />
       <main className="space-y-6 px-4 pt-4">
         <CaptureZone onSaved={invalidate} />
 
         <div className="space-y-2">
           <SectionLabel>
-            Today {data ? `· ${data.length} items` : ""}
+            Сегодня {data ? `· ${data.length}` : ""}
           </SectionLabel>
 
           {isLoading && (
@@ -60,7 +60,7 @@ export function InboxScreen() {
           {isError && (
             <Card>
               <ErrorState
-                title="Не получилось загрузить Inbox"
+                title="Не получилось загрузить Входящие"
                 description="Проверьте соединение и попробуйте снова."
                 onRetry={() => refetch()}
               />
@@ -70,7 +70,7 @@ export function InboxScreen() {
           {!isLoading && !isError && data?.length === 0 && (
             <Card>
               <EmptyState
-                title="Inbox пуст"
+                title="Входящие пусты"
                 description="Вставьте ссылку, текст или изображение выше — здесь появится то, что ИИ ещё не разобрал."
               />
             </Card>

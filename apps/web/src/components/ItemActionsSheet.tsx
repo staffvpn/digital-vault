@@ -60,7 +60,7 @@ export function ItemActionsSheet({
     <Sheet open={open} onClose={onClose} title={item.title ?? "Без названия"}>
       <div className="space-y-3">
         <div className="space-y-1.5">
-          <label className="text-[10px] font-medium uppercase tracking-wider text-slate-dim">Category</label>
+          <label className="text-[10px] font-medium uppercase tracking-wider text-slate-dim">Категория</label>
           <input
             value={category}
             onChange={(e) => setCategory(e.target.value)}
@@ -69,7 +69,7 @@ export function ItemActionsSheet({
           />
         </div>
         <div className="space-y-1.5">
-          <label className="text-[10px] font-medium uppercase tracking-wider text-slate-dim">Tags</label>
+          <label className="text-[10px] font-medium uppercase tracking-wider text-slate-dim">Теги</label>
           <input
             value={tags}
             onChange={(e) => setTags(e.target.value)}

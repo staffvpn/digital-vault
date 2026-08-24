@@ -4,10 +4,10 @@ import clsx from "clsx";
 import { haptic } from "../lib/telegram";
 
 const items = [
-  { to: "/", label: "Inbox", icon: Inbox, end: true },
-  { to: "/vault", label: "Vault", icon: Lock, end: false },
-  { to: "/library", label: "Library", icon: LayoutGrid, end: false },
-  { to: "/search", label: "Search", icon: Search, end: false },
+  { to: "/", label: "Входящие", icon: Inbox, end: true },
+  { to: "/vault", label: "Сейф", icon: Lock, end: false },
+  { to: "/library", label: "Библиотека", icon: LayoutGrid, end: false },
+  { to: "/search", label: "Поиск", icon: Search, end: false },
 ];
 
 export function BottomNav() {

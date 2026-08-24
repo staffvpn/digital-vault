@@ -14,7 +14,7 @@ function rub(amount: number): string {
   return `${amount.toLocaleString("ru-RU")} ₽/мес`;
 }
 
-const PLAN_TITLES: Record<string, string> = { free: "Free", pro: "Pro", pro_plus: "Pro+" };
+const PLAN_TITLES: Record<string, string> = { free: "Бесплатный", pro: "Про", pro_plus: "Про+" };
 
 export function SettingsScreen() {
   const profile = useAuthStore((s) => s.profile);
@@ -25,7 +25,7 @@ export function SettingsScreen() {
 
   return (
     <div className="mx-auto min-h-screen max-w-md pb-24">
-      <Header title="Account" eyebrow="Digital Vault" back />
+      <Header title="Аккаунт" eyebrow="Личное хранилище" back />
       <main className="space-y-5 px-4 pt-4">
         <Card className="flex items-center gap-3 p-4">
           <div className="flex h-11 w-11 items-center justify-center rounded-md border border-hairline bg-graphite-raised text-slate">
@@ -41,15 +41,15 @@ export function SettingsScreen() {
 
         {profile && currentPlan && (
           <Card className="space-y-3 p-4">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-slate-dim">Usage</p>
-            <UsageRow label="Storage" used={profile.storageUsedBytes} limit={currentPlan.storage_limit_bytes} format={formatBytes} />
+            <p className="text-[11px] font-medium uppercase tracking-wider text-slate-dim">Расход</p>
+            <UsageRow label="Хранилище" used={profile.storageUsedBytes} limit={currentPlan.storage_limit_bytes} format={formatBytes} />
             <UsageRow label="AI-операции" used={profile.aiCallsUsed} limit={currentPlan.ai_calls_limit_per_month} format={(n) => `${n}`} />
             <UsageRow label="Секреты" used={profile.secretsCount} limit={currentPlan.secrets_limit} format={(n) => `${n}`} />
           </Card>
         )}
 
         <div className="space-y-2">
-          <p className="px-1 text-[11px] font-medium uppercase tracking-wider text-slate-dim">Plans</p>
+          <p className="px-1 text-[11px] font-medium uppercase tracking-wider text-slate-dim">Тарифы</p>
 
           {isLoading && (
             <div className="space-y-2">
@@ -94,7 +94,7 @@ export function SettingsScreen() {
                     className="w-full"
                     onClick={() => push("Оплата подключается — скоро через Platega.io", "default")}
                   >
-                    {plan.id === "free" ? "Понизить" : "Upgrade"}
+                    {plan.id === "free" ? "Понизить" : "Улучшить"}
                   </Button>
                 )}
               </Card>
@@ -103,7 +103,7 @@ export function SettingsScreen() {
         </div>
 
         <p className="px-1 text-center text-[11px] leading-relaxed text-slate-dim">
-          Digital Vault не даёт абсолютных гарантий безопасности — но шифрует секреты на сервере, никогда не хранит
+          Сервис не даёт абсолютных гарантий безопасности — но шифрует секреты на сервере, никогда не хранит
           их в открытом виде и не отправляет в AI.
         </p>
       </main>

@@ -3,18 +3,26 @@ import { ClipboardPaste, Upload, ShieldAlert, Check, Pencil, X, KeyRound } from 
 import { Button, Card, Tag } from "./ui";
 import { ProcessingReadout } from "./ProcessingReadout";
 import { typeMeta } from "../lib/typeMeta";
-import { classifyContent, createItem, uploadFile, createSecret } from "../lib/api";
+import { classifyContent, createItem, updateItem, uploadFile, createSecret } from "../lib/api";
 import { useToastStore } from "../state/toast";
 import { haptic, hapticNotify } from "../lib/telegram";
 import type { ClassifyResult, ItemType } from "../types";
 
 type Stage = "idle" | "dragging" | "processing" | "result" | "credential" | "uploading";
 
+interface LinkMeta {
+  title: string | null;
+  description: string | null;
+  image: string | null;
+  domain: string | null;
+}
+
 interface Draft {
   kind: "url" | "text" | "image";
   content: string;
   mimeType?: string;
   raw: string;
+  file?: File;
 }
 
 function isUrl(text: string): boolean {
@@ -45,6 +53,7 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
   const [stage, setStage] = useState<Stage>("idle");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [result, setResult] = useState<ClassifyResult | null>(null);
+  const [linkMeta, setLinkMeta] = useState<LinkMeta | null>(null);
   const [editing, setEditing] = useState(false);
   const [editCategory, setEditCategory] = useState("");
   const [editTags, setEditTags] = useState("");
@@ -54,9 +63,11 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
 
   const runClassification = useCallback(async (d: Draft) => {
     setDraft(d);
+    setLinkMeta(null);
     setStage("processing");
     try {
-      const { result } = await classifyContent({ kind: d.kind, content: d.content, mimeType: d.mimeType });
+      const { result, linkMeta: meta } = await classifyContent({ kind: d.kind, content: d.content, mimeType: d.mimeType });
+      if (meta) setLinkMeta(meta as LinkMeta);
       if (result.type === "possible_credential") {
         const guess = guessCredentialFields(d.raw);
         setCredFields({ name: "", username: guess.username ?? "", password: guess.password ?? "" });
@@ -83,7 +94,7 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
       if (!file) return;
       if (file.type.startsWith("image/")) {
         const base64 = await fileToBase64(file);
-        runClassification({ kind: "image", content: base64, mimeType: file.type, raw: "" });
+        runClassification({ kind: "image", content: base64, mimeType: file.type, raw: "", file });
       } else {
         setStage("uploading");
         try {
@@ -139,6 +150,7 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
     setStage("idle");
     setDraft(null);
     setResult(null);
+    setLinkMeta(null);
     setEditing(false);
     setCredFields({ name: "", username: "", password: "" });
   };
@@ -157,20 +169,36 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
   const handleSave = async () => {
     if (!result || !draft) return;
     haptic("medium");
+    const tags = editTags
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
     try {
-      await createItem({
-        type: (result.type as ItemType) ?? "text",
-        category: editCategory || null,
-        tags: editTags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
-        title: result.title ?? (draft.kind === "text" ? draft.content.slice(0, 80) : null),
-        description: draft.kind === "text" ? draft.content : null,
-        source_url: draft.kind === "url" ? draft.content : null,
-        status: "saved",
-        confidence: result.confidence,
-      });
+      if (draft.kind === "image" && draft.file) {
+        // The image itself was only ever sent to the AI for classification —
+        // actually persist the bytes now, then attach the AI's metadata.
+        const item = await uploadFile(draft.file);
+        await updateItem(item.id, {
+          category: editCategory || null,
+          tags,
+          title: result.title ?? draft.file.name,
+          status: "saved",
+          confidence: result.confidence,
+        });
+      } else {
+        await createItem({
+          type: (result.type as ItemType) ?? "text",
+          category: editCategory || null,
+          tags,
+          title: result.title ?? linkMeta?.title ?? (draft.kind === "text" ? draft.content.slice(0, 80) : null),
+          description: draft.kind === "text" ? draft.content : linkMeta?.description ?? null,
+          source_url: draft.kind === "url" ? draft.content : null,
+          source_domain: linkMeta?.domain ?? null,
+          preview_url: linkMeta?.image ?? null,
+          status: "saved",
+          confidence: result.confidence,
+        });
+      }
       push("Сохранено", "success");
       onSaved();
       reset();
@@ -313,6 +341,7 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
         <ResultCard
           result={result}
           draft={draft}
+          linkMeta={linkMeta}
           lowConfidence={Boolean(lowConfidence)}
           editing={editing}
           editCategory={editCategory}
@@ -331,6 +360,7 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
 function ResultCard({
   result,
   draft,
+  linkMeta,
   lowConfidence,
   editing,
   editCategory,
@@ -343,6 +373,7 @@ function ResultCard({
 }: {
   result: ClassifyResult;
   draft: Draft;
+  linkMeta: LinkMeta | null;
   lowConfidence: boolean;
   editing: boolean;
   editCategory: string;
@@ -355,6 +386,7 @@ function ResultCard({
 }) {
   const meta = typeMeta((result.type as ItemType) ?? "text");
   const Icon = meta.icon;
+  const previewSrc = draft.kind === "image" ? `data:${draft.mimeType};base64,${draft.content}` : linkMeta?.image;
 
   return (
     <div className="space-y-4 py-1">
@@ -363,12 +395,18 @@ function ResultCard({
         НАЙДЕНО
       </div>
 
+      {previewSrc && (
+        <div className="overflow-hidden rounded-md border border-hairline bg-graphite-raised">
+          <img src={previewSrc} alt="" className="max-h-40 w-full object-cover" />
+        </div>
+      )}
+
       <div className="flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-hairline bg-graphite-raised text-signal">
           <Icon size={18} strokeWidth={1.5} />
         </div>
         <div className="min-w-0 space-y-1">
-          <p className="text-sm font-medium text-bone">{meta.label}</p>
+          <p className="text-sm font-medium text-bone">{result.title ?? linkMeta?.title ?? meta.label}</p>
           {draft.kind === "url" && (
             <p className="truncate text-xs text-slate">{new URL(draft.content).hostname.replace(/^www\./, "")}</p>
           )}

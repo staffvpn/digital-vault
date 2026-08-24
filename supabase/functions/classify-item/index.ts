@@ -6,10 +6,19 @@ import { fetchLinkMeta } from "./_shared/linkMeta.ts";
 
 const TAXONOMY = `
 Возможные type: link, text, image, file, note, movie, series, service, bookmark, design_reference.
+
+ВАЖНО про movie/series: используй эти типы ТОЛЬКО для полнометражного фильма или
+сериала целиком (страница на IMDb/Кинопоиске/Shazam-like сервисе, трейлер с
+названием картины и годом выпуска). Одиночное видео с YouTube/Vimeo/TikTok —
+влог, обзор, туториал, клип, интервью, короткое видео — это НЕ фильм и НЕ
+сериал, даже если это видео про кино. Такое видео классифицируй как type
+"bookmark" с category "Видео" и subcategory — название площадки (YouTube и т.п.).
+
 Категории (category / subcategory), выбирай наиболее подходящую:
 - Насмотренность: Web Design, UI/UX, Branding, Typography, 3D, Illustration, Animation, Colors, Landing Pages
-- Кино: Хочу посмотреть, Смотрю, Посмотрено (только для type=movie или series)
+- Кино: Хочу посмотреть, Смотрю, Посмотрено (только для настоящего type=movie или series, см. правило выше)
 - Сервисы: Design, Development, AI, Productivity, Marketing, Finance, Other
+- Видео: YouTube, Vimeo, TikTok и т.п. — для одиночных видео, которые не являются фильмом/сериалом
 - Закладки: короткая категория по смыслу сайта
 - Заметки: короткий Project + теги
 Отвечай СТРОГО в формате JSON без пояснений и без markdown:

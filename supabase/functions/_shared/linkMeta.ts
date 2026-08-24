@@ -18,8 +18,38 @@ function extractMeta(html: string, prop: string): string | null {
   return null;
 }
 
+const YOUTUBE_HOSTS = new Set(["youtube.com", "m.youtube.com", "youtu.be"]);
+
+// YouTube's plain server-side HTML fetch is unreliable from EU-region
+// servers — Google often serves a cookie-consent interstitial instead of
+// the actual video page, which strips out title/thumbnail entirely. The
+// public oEmbed endpoint is built for exactly this (link previews) and
+// needs no API key or consent handling.
+async function fetchYoutubeOembed(targetUrl: string, domain: string): Promise<LinkMeta | null> {
+  try {
+    const res = await fetch(
+      `https://www.youtube.com/oembed?url=${encodeURIComponent(targetUrl)}&format=json`,
+      { signal: AbortSignal.timeout(6000) },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      title: data.title ?? null,
+      description: data.author_name ? `Канал: ${data.author_name}` : null,
+      image: data.thumbnail_url ?? null,
+      domain,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchLinkMeta(targetUrl: string): Promise<LinkMeta> {
   const domain = new URL(targetUrl).hostname.replace(/^www\./, "");
+  if (YOUTUBE_HOSTS.has(domain)) {
+    const oembed = await fetchYoutubeOembed(targetUrl, domain);
+    if (oembed) return oembed;
+  }
   try {
     const res = await fetch(targetUrl, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; DigitalVaultBot/1.0)" },

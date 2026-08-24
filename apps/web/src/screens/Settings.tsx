@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { Check, UserRound } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Check, UserRound, Info, ChevronRight } from "lucide-react";
 import clsx from "clsx";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
@@ -17,6 +18,7 @@ function rub(amount: number): string {
 const PLAN_TITLES: Record<string, string> = { free: "Free", pro: "Pro", pro_plus: "Premium" };
 
 export function SettingsScreen() {
+  const navigate = useNavigate();
   const profile = useAuthStore((s) => s.profile);
   const push = useToastStore((s) => s.push);
   const { data: plans, isLoading, isError, refetch } = useQuery({ queryKey: ["plans"], queryFn: listPlans });
@@ -102,10 +104,16 @@ export function SettingsScreen() {
           })}
         </div>
 
-        <p className="px-1 text-center text-[11px] leading-relaxed text-slate-dim">
-          Сервис не даёт абсолютных гарантий безопасности — но шифрует секреты на сервере, никогда не хранит
-          их в открытом виде и не отправляет в AI.
-        </p>
+        <button
+          onClick={() => navigate("/settings/info")}
+          className="flex w-full items-center gap-3 rounded-lg border border-hairline bg-graphite px-4 py-3 text-left transition-colors hover:border-hairline-strong active:scale-[0.99]"
+        >
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-hairline bg-graphite-raised text-slate">
+            <Info size={15} strokeWidth={1.5} />
+          </div>
+          <p className="flex-1 text-sm font-medium text-bone">Информация</p>
+          <ChevronRight size={15} strokeWidth={1.5} className="shrink-0 text-slate-dim" />
+        </button>
       </main>
       <BottomNav />
     </div>

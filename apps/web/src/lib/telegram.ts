@@ -19,6 +19,7 @@ interface TelegramWebApp {
     impactOccurred: (style: "light" | "medium" | "heavy" | "rigid" | "soft") => void;
     notificationOccurred: (type: "error" | "success" | "warning") => void;
   };
+  openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
   BackButton?: {
     show: () => void;
     hide: () => void;
@@ -64,3 +65,12 @@ export function getInitData(): string | null {
 }
 
 export const isInsideTelegram = (): boolean => Boolean(getTelegramWebApp()?.initData);
+
+export function openExternalLink(url: string): void {
+  const tg = getTelegramWebApp();
+  if (tg?.openLink) {
+    tg.openLink(url);
+  } else {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+}

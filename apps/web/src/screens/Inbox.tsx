@@ -1,20 +1,17 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
-import { Sparkles, ChevronRight } from "lucide-react";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
 import { CaptureZone } from "../components/CaptureZone";
 import { ItemRow } from "../components/ItemRow";
 import { ItemActionsSheet } from "../components/ItemActionsSheet";
-import { Card, EmptyState, ErrorState, SectionLabel, Skeleton } from "../components/ui";
+import { Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { listItems, updateItem } from "../lib/api";
 import { useToastStore } from "../state/toast";
 import type { VaultItem } from "../types";
 
 export function InboxScreen() {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const push = useToastStore((s) => s.push);
   const [selected, setSelected] = useState<VaultItem | null>(null);
 
@@ -42,10 +39,6 @@ export function InboxScreen() {
         <CaptureZone onSaved={invalidate} />
 
         <div className="space-y-2">
-          <SectionLabel>
-            Сегодня {data ? `· ${data.length}` : ""}
-          </SectionLabel>
-
           {isLoading && (
             <Card className="divide-y divide-hairline p-0">
               {[0, 1, 2].map((i) => (
@@ -92,20 +85,6 @@ export function InboxScreen() {
             </Card>
           )}
         </div>
-
-        <button
-          onClick={() => navigate("/settings")}
-          className="flex w-full items-center gap-3 rounded-lg border border-signal-dim/40 bg-signal/5 px-4 py-3 text-left transition-colors hover:bg-signal/10 active:scale-[0.99]"
-        >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-signal-dim/40 text-signal">
-            <Sparkles size={15} strokeWidth={1.5} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-bone">Больше места и AI-запросов</p>
-            <p className="text-xs text-slate">Посмотреть тарифы Pro и Premium</p>
-          </div>
-          <ChevronRight size={15} strokeWidth={1.5} className="shrink-0 text-slate-dim" />
-        </button>
       </main>
       <ItemActionsSheet
         item={selected}

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Palette } from "lucide-react";
+import { PlaySquare } from "lucide-react";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
 import { ItemVisualCard } from "../components/ItemVisualCard";
@@ -9,20 +9,20 @@ import { Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { listItems } from "../lib/api";
 import type { VaultItem } from "../types";
 
-export function InspirationScreen() {
+export function VideoScreen() {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<VaultItem | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["items", "design_reference"],
-    queryFn: () => listItems({ type: "design_reference" }),
+    queryKey: ["items", "bookmark", "Видео"],
+    queryFn: () => listItems({ type: "bookmark", category: "Видео" }),
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["items"] });
 
   return (
     <div className="mx-auto min-h-screen max-w-md pb-24">
-      <Header title="Дизайн" eyebrow="Библиотека" back />
+      <Header title="Видео" eyebrow="Библиотека" back />
       <main className="px-4 pt-4">
         {isLoading && (
           <div className="grid grid-cols-2 gap-3">
@@ -41,9 +41,9 @@ export function InspirationScreen() {
         {!isLoading && !isError && data?.length === 0 && (
           <Card>
             <EmptyState
-              icon={<Palette size={22} strokeWidth={1.5} />}
+              icon={<PlaySquare size={22} strokeWidth={1.5} />}
               title="Пока пусто"
-              description="Портфолио, кейсы, логотипы — сохраняйте ссылку, здесь появится карточка с превью."
+              description="Вставьте ссылку на видео (YouTube и т.п.) во Входящих — оно появится здесь с обложкой."
             />
           </Card>
         )}

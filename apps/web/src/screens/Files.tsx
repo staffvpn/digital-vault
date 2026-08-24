@@ -23,11 +23,8 @@ export function FilesScreen() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["items", "files"],
-    queryFn: async () => {
-      const [files, images] = await Promise.all([listItems({ type: "file" }), listItems({ type: "image" })]);
-      return [...files, ...images];
-    },
+    queryKey: ["items", "file"],
+    queryFn: () => listItems({ type: "file" }),
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["items"] });

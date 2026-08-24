@@ -11,12 +11,14 @@ import { VaultScreen } from "./screens/Vault";
 import { LibraryHub } from "./screens/LibraryHub";
 import { InspirationScreen } from "./screens/Inspiration";
 import { BookmarksScreen } from "./screens/Bookmarks";
-import { MoviesScreen } from "./screens/Movies";
+import { VideoScreen } from "./screens/Video";
+import { ImagesScreen } from "./screens/Images";
 import { ServicesScreen } from "./screens/Services";
 import { FilesScreen } from "./screens/Files";
 import { NotesScreen } from "./screens/Notes";
 import { SearchScreen } from "./screens/Search";
 import { SettingsScreen } from "./screens/Settings";
+import { InfoScreen } from "./screens/Info";
 
 function AuthGate() {
   const { status, error, bootstrap, enterPreviewMode } = useAuthStore();
@@ -79,14 +81,16 @@ function AppRoutes() {
       <Route path="/" element={<InboxScreen />} />
       <Route path="/vault" element={<VaultScreen />} />
       <Route path="/library" element={<LibraryHub />} />
-      <Route path="/library/inspiration" element={<InspirationScreen />} />
+      <Route path="/library/design" element={<InspirationScreen />} />
       <Route path="/library/bookmarks" element={<BookmarksScreen />} />
-      <Route path="/library/movies" element={<MoviesScreen />} />
+      <Route path="/library/video" element={<VideoScreen />} />
       <Route path="/library/services" element={<ServicesScreen />} />
+      <Route path="/library/images" element={<ImagesScreen />} />
       <Route path="/library/files" element={<FilesScreen />} />
       <Route path="/library/notes" element={<NotesScreen />} />
       <Route path="/search" element={<SearchScreen />} />
       <Route path="/settings" element={<SettingsScreen />} />
+      <Route path="/settings/info" element={<InfoScreen />} />
     </Routes>
   );
 }

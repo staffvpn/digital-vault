@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Trash2, Check } from "lucide-react";
+import { Trash2, Check, ExternalLink } from "lucide-react";
 import { Sheet } from "./Sheet";
 import { Button } from "./ui";
 import { deleteItem, updateItem } from "../lib/api";
+import { openExternalLink, haptic } from "../lib/telegram";
 import { useToastStore } from "../state/toast";
 import type { VaultItem } from "../types";
 
@@ -18,13 +19,11 @@ export function ItemActionsSheet({
   onChanged: () => void;
 }) {
   const [category, setCategory] = useState("");
-  const [tags, setTags] = useState("");
   const push = useToastStore((s) => s.push);
 
   useEffect(() => {
     if (item) {
       setCategory(item.category ?? "");
-      setTags(item.tags?.join(", ") ?? "");
     }
   }, [item]);
 
@@ -34,7 +33,6 @@ export function ItemActionsSheet({
     try {
       await updateItem(item.id, {
         category: category || null,
-        tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
         status: "saved",
       });
       push("Обновлено", "success");
@@ -56,24 +54,27 @@ export function ItemActionsSheet({
     }
   };
 
+  const openLink = () => {
+    if (!item.source_url) return;
+    haptic("light");
+    openExternalLink(item.source_url);
+  };
+
   return (
     <Sheet open={open} onClose={onClose} title={item.title ?? "Без названия"}>
       <div className="space-y-3">
+        {item.source_url && (
+          <Button variant="secondary" onClick={openLink} className="w-full">
+            <ExternalLink size={14} strokeWidth={1.5} />
+            Открыть ссылку
+          </Button>
+        )}
         <div className="space-y-1.5">
           <label className="text-[10px] font-medium uppercase tracking-wider text-slate-dim">Категория</label>
           <input
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            placeholder="Например: Насмотренность / Web Design"
-            className="w-full rounded-md border border-hairline bg-graphite-raised px-3 py-2 text-sm text-bone placeholder:text-slate-dim outline-none focus:border-signal-dim"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-medium uppercase tracking-wider text-slate-dim">Теги</label>
-          <input
-            value={tags}
-            onChange={(e) => setTags(e.target.value)}
-            placeholder="через запятую"
+            placeholder="Например: Дизайн / Web Design"
             className="w-full rounded-md border border-hairline bg-graphite-raised px-3 py-2 text-sm text-bone placeholder:text-slate-dim outline-none focus:border-signal-dim"
           />
         </div>

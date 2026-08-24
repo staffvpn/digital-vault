@@ -1,15 +1,16 @@
 import { useNavigate } from "react-router-dom";
-import { Palette, Bookmark, Clapperboard, Wrench, FolderOpen, StickyNote, ChevronRight } from "lucide-react";
+import { Palette, Bookmark, PlaySquare, Wrench, Image as ImageIcon, FolderOpen, StickyNote, ChevronRight } from "lucide-react";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
 import { Card } from "../components/ui";
 
 const sections = [
-  { to: "/library/inspiration", label: "Насмотренность", desc: "Референсы и вдохновение", icon: Palette },
-  { to: "/library/bookmarks", label: "Закладки", desc: "Сохранённые ссылки", icon: Bookmark },
-  { to: "/library/movies", label: "Фильмы", desc: "Фильмы и сериалы", icon: Clapperboard },
+  { to: "/library/design", label: "Дизайн", desc: "Портфолио, кейсы, логотипы", icon: Palette },
+  { to: "/library/bookmarks", label: "Закладки", desc: "Сохранённые сайты и ссылки", icon: Bookmark },
+  { to: "/library/video", label: "Видео", desc: "Ссылки на видео", icon: PlaySquare },
   { to: "/library/services", label: "Сервисы", desc: "Полезные сайты и инструменты", icon: Wrench },
-  { to: "/library/files", label: "Файлы", desc: "Документы и изображения", icon: FolderOpen },
+  { to: "/library/images", label: "Изображения", desc: "Скриншоты и картинки", icon: ImageIcon },
+  { to: "/library/files", label: "Файлы", desc: "Документы и файлы", icon: FolderOpen },
   { to: "/library/notes", label: "Заметки", desc: "Быстрые заметки", icon: StickyNote },
 ];
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ClipboardPaste, Upload, ShieldAlert, Check, Pencil, X, KeyRound } from "lucide-react";
-import { Button, Card, Tag } from "./ui";
+import { Button, Card } from "./ui";
 import { ProcessingReadout } from "./ProcessingReadout";
 import { typeMeta } from "../lib/typeMeta";
 import { classifyContent, createItem, updateItem, uploadFile, createSecret } from "../lib/api";
@@ -56,7 +56,7 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
   const [linkMeta, setLinkMeta] = useState<LinkMeta | null>(null);
   const [editing, setEditing] = useState(false);
   const [editCategory, setEditCategory] = useState("");
-  const [editTags, setEditTags] = useState("");
+  const [saving, setSaving] = useState(false);
   const [credFields, setCredFields] = useState({ name: "", username: "", password: "" });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const push = useToastStore((s) => s.push);
@@ -77,13 +77,11 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
       }
       setResult(result);
       setEditCategory(result.category ?? "");
-      setEditTags(result.tags?.join(", ") ?? "");
       setStage("result");
       hapticNotify("success");
     } catch {
       setResult({ type: "unknown", category: null, title: null, tags: [], confidence: 0 });
       setEditCategory("");
-      setEditTags("");
       setStage("result");
     }
   }, []);
@@ -152,6 +150,7 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
     setResult(null);
     setLinkMeta(null);
     setEditing(false);
+    setSaving(false);
     setCredFields({ name: "", username: "", password: "" });
   };
 
@@ -166,13 +165,42 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
     if (uri) handleText(uri);
   };
 
+  // Mobile has no Ctrl+V — tapping anywhere on the empty capture field reads
+  // the clipboard directly, same effect as a desktop paste.
+  const tryClipboardTap = async () => {
+    if (stage !== "idle" && stage !== "dragging") return;
+    if (!navigator.clipboard) {
+      push("Вставьте вручную: Ctrl+V", "error");
+      return;
+    }
+    try {
+      if (navigator.clipboard.read) {
+        const clipItems = await navigator.clipboard.read();
+        for (const clipItem of clipItems) {
+          const imageType = clipItem.types.find((t) => t.startsWith("image/"));
+          if (imageType) {
+            const blob = await clipItem.getType(imageType);
+            const file = new File([blob], "clipboard-image.png", { type: imageType });
+            handleFiles([file]);
+            return;
+          }
+        }
+      }
+      const text = await navigator.clipboard.readText();
+      if (text.trim()) {
+        handleText(text);
+        return;
+      }
+      push("Буфер обмена пуст", "error");
+    } catch {
+      push("Нет доступа к буферу обмена — вставьте вручную", "error");
+    }
+  };
+
   const handleSave = async () => {
-    if (!result || !draft) return;
+    if (!result || !draft || saving) return;
+    setSaving(true);
     haptic("medium");
-    const tags = editTags
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
     try {
       if (draft.kind === "image" && draft.file) {
         // The image itself was only ever sent to the AI for classification —
@@ -180,7 +208,6 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
         const item = await uploadFile(draft.file);
         await updateItem(item.id, {
           category: editCategory || null,
-          tags,
           title: result.title ?? draft.file.name,
           status: "saved",
           confidence: result.confidence,
@@ -189,7 +216,6 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
         await createItem({
           type: (result.type as ItemType) ?? "text",
           category: editCategory || null,
-          tags,
           title: result.title ?? linkMeta?.title ?? (draft.kind === "text" ? draft.content.slice(0, 80) : null),
           description: draft.kind === "text" ? draft.content : linkMeta?.description ?? null,
           source_url: draft.kind === "url" ? draft.content : null,
@@ -204,6 +230,7 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
       reset();
     } catch {
       push("Не удалось сохранить", "error");
+      setSaving(false);
     }
   };
 
@@ -237,7 +264,7 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
       onDragLeave={() => stage === "dragging" && setStage("idle")}
       onDrop={onDrop}
       className={
-        "relative overflow-hidden border-dashed p-6 transition-colors duration-150 " +
+        "relative overflow-hidden border-dashed p-5 transition-colors duration-150 " +
         (stage === "dragging" ? "border-signal bg-graphite-raised" : "border-hairline")
       }
     >
@@ -246,28 +273,23 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
       )}
 
       {(stage === "idle" || stage === "dragging") && (
-        <div className="flex flex-col items-center gap-4 py-6 text-center">
-          <div className="flex h-11 w-11 items-center justify-center rounded-md border border-hairline bg-graphite-raised text-signal">
-            <ClipboardPaste size={20} strokeWidth={1.5} />
+        <div
+          onClick={tryClipboardTap}
+          className="flex cursor-pointer flex-col items-center gap-2.5 py-3 text-center"
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-md border border-hairline bg-graphite-raised text-signal">
+            <ClipboardPaste size={17} strokeWidth={1.5} />
           </div>
-          <div className="space-y-1.5">
-            <h2 className="text-xl font-semibold tracking-tight text-bone">СОХРАНИ ЧТО УГОДНО</h2>
-            <p className="text-sm text-slate">
-              Перетащи сюда <br className="sm:hidden" />
-              или нажми Ctrl + V
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-1.5">
-            {["Ссылка", "Текст", "Фото", "Файл", "Секрет"].map((t, i) => (
-              <span key={t} className="flex items-center gap-1.5 text-[11px] text-slate-dim">
-                {i > 0 && <span className="text-hairline-strong">·</span>}
-                {t}
-              </span>
-            ))}
-          </div>
+          <p className="text-sm text-slate">
+            Нажмите, чтобы вставить, <br className="sm:hidden" />
+            или перетащите сюда
+          </p>
           <button
-            onClick={() => fileInputRef.current?.click()}
-            className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-slate hover:text-bone transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              fileInputRef.current?.click();
+            }}
+            className="mt-0.5 inline-flex items-center gap-1.5 text-xs font-medium text-slate hover:text-bone transition-colors"
           >
             <Upload size={13} strokeWidth={1.5} />
             или загрузить файл
@@ -276,6 +298,7 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
             ref={fileInputRef}
             type="file"
             className="hidden"
+            onClick={(e) => e.stopPropagation()}
             onChange={(e) => e.target.files && handleFiles(e.target.files)}
           />
         </div>
@@ -345,9 +368,8 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
           lowConfidence={Boolean(lowConfidence)}
           editing={editing}
           editCategory={editCategory}
-          editTags={editTags}
+          saving={saving}
           setEditCategory={setEditCategory}
-          setEditTags={setEditTags}
           setEditing={setEditing}
           onSave={handleSave}
           onCancel={reset}
@@ -364,9 +386,8 @@ function ResultCard({
   lowConfidence,
   editing,
   editCategory,
-  editTags,
+  saving,
   setEditCategory,
-  setEditTags,
   setEditing,
   onSave,
   onCancel,
@@ -377,9 +398,8 @@ function ResultCard({
   lowConfidence: boolean;
   editing: boolean;
   editCategory: string;
-  editTags: string;
+  saving: boolean;
   setEditCategory: (v: string) => void;
-  setEditTags: (v: string) => void;
   setEditing: (v: boolean) => void;
   onSave: () => void;
   onCancel: () => void;
@@ -425,33 +445,13 @@ function ResultCard({
         </div>
       )}
 
-      {editing ? (
-        <div className="space-y-2.5">
-          <input
-            value={editCategory}
-            onChange={(e) => setEditCategory(e.target.value)}
-            placeholder="Категория"
-            className="w-full rounded-md border border-hairline bg-graphite-raised px-3 py-2 text-sm text-bone placeholder:text-slate-dim outline-none focus:border-signal-dim"
-          />
-          <input
-            value={editTags}
-            onChange={(e) => setEditTags(e.target.value)}
-            placeholder="Теги через запятую"
-            className="w-full rounded-md border border-hairline bg-graphite-raised px-3 py-2 text-sm text-bone placeholder:text-slate-dim outline-none focus:border-signal-dim"
-          />
-        </div>
-      ) : (
-        editTags && (
-          <div className="flex flex-wrap gap-1.5">
-            {editTags
-              .split(",")
-              .map((t) => t.trim())
-              .filter(Boolean)
-              .map((t) => (
-                <Tag key={t}>#{t}</Tag>
-              ))}
-          </div>
-        )
+      {editing && (
+        <input
+          value={editCategory}
+          onChange={(e) => setEditCategory(e.target.value)}
+          placeholder="Категория"
+          className="w-full rounded-md border border-hairline bg-graphite-raised px-3 py-2 text-sm text-bone placeholder:text-slate-dim outline-none focus:border-signal-dim"
+        />
       )}
 
       <div className="flex gap-2">
@@ -466,8 +466,8 @@ function ResultCard({
           <Pencil size={14} strokeWidth={1.5} />
           {editing ? "Готово" : "Изменить"}
         </Button>
-        <Button variant="primary" className="flex-1" onClick={onSave} disabled={lowConfidence && !editCategory}>
-          Сохранить
+        <Button variant="primary" className="flex-1" onClick={onSave} disabled={saving || (lowConfidence && !editCategory)}>
+          {saving ? "Сохраняем…" : "Сохранить"}
         </Button>
       </div>
     </div>

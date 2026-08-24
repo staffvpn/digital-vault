@@ -5,24 +5,25 @@ import { looksLikeCredential } from "./_shared/heuristics.ts";
 import { fetchLinkMeta } from "./_shared/linkMeta.ts";
 
 const TAXONOMY = `
-Возможные type: link, text, image, file, note, movie, series, service, bookmark, design_reference.
+Возможные type: link, text, image, file, note, service, bookmark, design_reference.
+(Типы movie/series/tags не используются — не добавляй их.)
 
-ВАЖНО про movie/series: используй эти типы ТОЛЬКО для полнометражного фильма или
-сериала целиком (страница на IMDb/Кинопоиске/Shazam-like сервисе, трейлер с
-названием картины и годом выпуска). Одиночное видео с YouTube/Vimeo/TikTok —
-влог, обзор, туториал, клип, интервью, короткое видео — это НЕ фильм и НЕ
-сериал, даже если это видео про кино. Такое видео классифицируй как type
-"bookmark" с category "Видео" и subcategory — название площадки (YouTube и т.п.).
+Правила:
+- Любая ссылка на одиночное видео (YouTube, Vimeo, TikTok, влог, обзор,
+  туториал, клип, трейлер и т.п.) — это type "bookmark", category "Видео",
+  subcategory — название площадки (YouTube и т.п.).
+- Если по ссылке видно портфолио, чью-то дизайн-работу, логотипы, кейс на
+  Behance/Dribbble/Pinterest — type "design_reference", category "Дизайн"
+  (без подкатегорий).
+- Полезный сайт/инструмент/сервис (конвертер, редактор, SaaS-продукт) —
+  type "service", category — одна из: Design, Development, AI, Productivity,
+  Marketing, Finance, Other.
+- Обычная ссылка на сайт без явной категории выше — type "bookmark",
+  category — коротко по смыслу сайта.
+- Заметка (текст без ссылки) — type "note", category — короткий Project.
 
-Категории (category / subcategory), выбирай наиболее подходящую:
-- Насмотренность: Web Design, UI/UX, Branding, Typography, 3D, Illustration, Animation, Colors, Landing Pages
-- Кино: Хочу посмотреть, Смотрю, Посмотрено (только для настоящего type=movie или series, см. правило выше)
-- Сервисы: Design, Development, AI, Productivity, Marketing, Finance, Other
-- Видео: YouTube, Vimeo, TikTok и т.п. — для одиночных видео, которые не являются фильмом/сериалом
-- Закладки: короткая категория по смыслу сайта
-- Заметки: короткий Project + теги
 Отвечай СТРОГО в формате JSON без пояснений и без markdown:
-{"type":"...","category":"...","subcategory":"...","title":"...","tags":["..."],"confidence":0.0}
+{"type":"...","category":"...","subcategory":"...","title":"...","confidence":0.0}
 `.trim();
 
 // Classification runs through Polza.ai — an OpenAI-compatible proxy that

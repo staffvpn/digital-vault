@@ -80,18 +80,35 @@ Deno.serve(async (req) => {
     });
   }
 
-  // 2. Plan/AI-call limit check.
+  // 2. Plan/AI-call limit check. Usage is metered per calendar month — if the
+  // profile's tracked period has rolled over, reset the counter before
+  // checking it, the same way a phone plan's minutes refresh monthly.
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, plan, ai_calls_used")
+    .select("id, plan, ai_calls_used, ai_calls_period_start")
     .eq("id", session.userId)
     .single();
+
+  let aiCallsUsed = profile?.ai_calls_used ?? 0;
+  if (profile) {
+    const currentPeriod = new Date();
+    currentPeriod.setUTCDate(1);
+    const currentPeriodStr = currentPeriod.toISOString().slice(0, 10);
+    if (profile.ai_calls_period_start !== currentPeriodStr) {
+      aiCallsUsed = 0;
+      await supabase
+        .from("profiles")
+        .update({ ai_calls_used: 0, ai_calls_period_start: currentPeriodStr })
+        .eq("id", session.userId);
+    }
+  }
+
   const { data: plan } = await supabase
     .from("plans")
     .select("ai_calls_limit_per_month")
     .eq("id", profile?.plan ?? "free")
     .single();
-  if (plan && profile && profile.ai_calls_used >= plan.ai_calls_limit_per_month) {
+  if (plan && profile && aiCallsUsed >= plan.ai_calls_limit_per_month) {
     return json({ error: "ai_limit_reached", limit: plan.ai_calls_limit_per_month }, 402);
   }
 
@@ -125,7 +142,7 @@ Deno.serve(async (req) => {
   await supabase.from("usage_events").insert({ user_id: session.userId, kind: "ai_call" });
   await supabase
     .from("profiles")
-    .update({ ai_calls_used: (profile?.ai_calls_used ?? 0) + 1 })
+    .update({ ai_calls_used: aiCallsUsed + 1 })
     .eq("id", session.userId);
 
   if (!aiResult) {

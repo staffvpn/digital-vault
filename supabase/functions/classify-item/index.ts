@@ -16,40 +16,42 @@ const TAXONOMY = `
 {"type":"...","category":"...","subcategory":"...","title":"...","tags":["..."],"confidence":0.0}
 `.trim();
 
-async function callClaude(input: { text?: string; imageBase64?: string; mimeType?: string }): Promise<any> {
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+// Classification runs through Polza.ai — an OpenAI-compatible proxy that
+// routes to Claude (and other providers) without needing a direct Anthropic
+// billing account. Model id is provider-prefixed: "anthropic/claude-sonnet-5".
+async function callModel(input: { text?: string; imageBase64?: string; mimeType?: string }): Promise<any> {
+  const apiKey = Deno.env.get("POLZA_API_KEY");
   if (!apiKey) return null;
 
   const content: any[] = [];
   if (input.imageBase64 && input.mimeType) {
-    content.push({
-      type: "image",
-      source: { type: "base64", media_type: input.mimeType, data: input.imageBase64 },
-    });
     content.push({ type: "text", text: "Опиши и классифицируй это изображение.\n\n" + TAXONOMY });
+    content.push({
+      type: "image_url",
+      image_url: { url: `data:${input.mimeType};base64,${input.imageBase64}` },
+    });
   } else {
     content.push({ type: "text", text: `Классифицируй этот контент:\n\n${input.text}\n\n${TAXONOMY}` });
   }
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("https://polza.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
+      authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "claude-sonnet-5",
+      model: "anthropic/claude-sonnet-5",
       max_tokens: 500,
       messages: [{ role: "user", content }],
     }),
   });
   if (!res.ok) return null;
   const data = await res.json();
-  const textBlock = data.content?.find((b: any) => b.type === "text");
-  if (!textBlock) return null;
+  const text: string | undefined = data.choices?.[0]?.message?.content;
+  if (!text) return null;
   try {
-    const match = textBlock.text.match(/\{[\s\S]*\}/);
+    const match = text.match(/\{[\s\S]*\}/);
     return match ? JSON.parse(match[0]) : null;
   } catch {
     return null;
@@ -107,7 +109,7 @@ Deno.serve(async (req) => {
     aiInput = { text: rawText };
   }
 
-  const aiResult = await callClaude(aiInput);
+  const aiResult = await callModel(aiInput);
 
   // 3. Safety net: if the AI/OCR pass surfaced credential-shaped text
   // anywhere in its own output, still route to the Vault confirmation flow

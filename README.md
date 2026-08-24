@@ -40,9 +40,11 @@ dev-режиме есть кнопка «Предпросмотр без Telegra
    - `TELEGRAM_BOT_TOKEN` — токен вашего бота от @BotFather
    - `SESSION_SECRET` — любая длинная случайная строка (32+ символа)
    - `VAULT_ENCRYPTION_KEY` — другая длинная случайная строка (32+ символа)
-   - `ANTHROPIC_API_KEY` — ключ Anthropic API (console.anthropic.com) —
+   - `POLZA_API_KEY` — ключ с polza.ai (OpenAI-совместимый прокси до Claude) —
      без него `classify-item` не сможет вызывать AI, но остальное приложение
      продолжит работать (просто будет предлагать выбрать категорию вручную).
+     Модель классификации: `anthropic/claude-sonnet-5`, endpoint
+     `https://polza.ai/api/v1/chat/completions`.
 
    Или через CLI после `supabase link`:
    ```bash

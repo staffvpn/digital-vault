@@ -84,11 +84,12 @@
   }
 }
 
-/* Slow, precise duotone sweep — used on the capture frame's accent bar on
-   Inbox. Signal teal fading through a deep indigo and back to near-black,
-   not a rainbow — reads as instrument-panel, not decorative. Plain
-   background-position animation (no @property) so it renders identically
-   across Telegram's Android/iOS WebViews. */
+/* Slow, precise sweep — used on the capture frame's accent bar on Inbox.
+   Stays entirely within the app's own signal-blue family (dim -> base ->
+   bright highlight -> base -> dim), just playing with brightness rather
+   than mixing in other hues — reads as instrument-panel, not decorative.
+   Plain background-position animation (no @property) so it renders
+   identically across Telegram's Android/iOS WebViews. */
 @keyframes aurora-flow {
   0%,
   100% {
@@ -99,7 +100,7 @@
   }
 }
 .aurora-flow {
-  background-image: linear-gradient(100deg, #4fb6d6, #5b4fd6, #101116, #4fb6d6);
+  background-image: linear-gradient(100deg, #2f6f80, #4fb6d6, #9be4f7, #4fb6d6, #2f6f80);
   background-size: 300% 300%;
   animation: aurora-flow 8s ease-in-out infinite;
 }

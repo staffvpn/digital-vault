@@ -7,6 +7,7 @@ import { haptic } from "../lib/telegram";
 import { isOpenable, openItemContent } from "../lib/openItem";
 import { useLightboxStore } from "../state/lightbox";
 import { useToastStore } from "../state/toast";
+import { FileThumb } from "./FileThumb";
 import type { VaultItem } from "../types";
 
 export function ItemActionsSheet({
@@ -79,6 +80,17 @@ export function ItemActionsSheet({
   return (
     <Sheet open={open} onClose={onClose} title={item.title ?? "Без названия"}>
       <div className="space-y-3">
+        {(item.type === "image" || item.preview_url) && (
+          <div className="overflow-hidden rounded-md border border-hairline bg-graphite-raised">
+            {item.type === "image" ? (
+              <div className="aspect-video w-full">
+                <FileThumb item={item} />
+              </div>
+            ) : (
+              <img src={item.preview_url ?? undefined} alt="" className="max-h-40 w-full object-cover" loading="lazy" />
+            )}
+          </div>
+        )}
         {isOpenable(item) && (
           <Button variant="secondary" onClick={openLink} className="w-full" disabled={opening}>
             <ExternalLink size={14} strokeWidth={1.5} />

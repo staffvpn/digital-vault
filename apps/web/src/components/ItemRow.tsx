@@ -6,6 +6,7 @@ import { haptic } from "../lib/telegram";
 import { isOpenable, openItemContent } from "../lib/openItem";
 import { useLightboxStore } from "../state/lightbox";
 import { useToastStore } from "../state/toast";
+import { FileThumb } from "./FileThumb";
 import type { VaultItem } from "../types";
 
 export function ItemRow({
@@ -46,8 +47,14 @@ export function ItemRow({
 
   return (
     <div className="flex items-center gap-3 border-b border-hairline px-4 py-3 last:border-b-0">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-hairline bg-graphite-raised text-slate">
-        <Icon size={16} strokeWidth={1.5} />
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md border border-hairline bg-graphite-raised text-slate">
+        {item.type === "image" ? (
+          <FileThumb item={item} />
+        ) : item.preview_url ? (
+          <img src={item.preview_url} alt="" className="h-full w-full object-cover" loading="lazy" />
+        ) : (
+          <Icon size={16} strokeWidth={1.5} />
+        )}
       </div>
       <button onClick={handlePrimaryTap} className="flex min-w-0 flex-1 flex-col items-start gap-1 text-left overflow-hidden">
         <span className="w-full truncate text-sm font-medium text-bone">

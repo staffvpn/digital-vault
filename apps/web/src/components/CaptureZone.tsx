@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import clsx from "clsx";
 import { ClipboardPaste, Upload, ShieldAlert, Check, Pencil, X, KeyRound } from "lucide-react";
-import { Button, Card } from "./ui";
+import { Button } from "./ui";
 import { ProcessingReadout } from "./ProcessingReadout";
 import { typeMeta } from "../lib/typeMeta";
 import { classifyContent, createItem, updateItem, uploadFile, createSecret } from "../lib/api";
@@ -255,56 +256,70 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
 
   const lowConfidence = result && (!result.category || result.confidence < 0.4);
 
+  const idleStage = stage === "idle" || stage === "dragging";
+
   return (
-    <Card
-      onDragOver={(e) => {
-        e.preventDefault();
-        if (stage === "idle") setStage("dragging");
-      }}
-      onDragLeave={() => stage === "dragging" && setStage("idle")}
-      onDrop={onDrop}
-      className={
-        "relative overflow-hidden border-dashed p-5 transition-colors duration-150 " +
-        (stage === "dragging" ? "border-signal bg-graphite-raised" : "border-hairline")
-      }
-    >
-      {stage === "dragging" && (
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-signal/60 animate-scanline" />
-      )}
+    <div className="relative">
+      {/* soft ambient glow behind the frame — same flowing gradient, blurred */}
+      <div
+        aria-hidden
+        className={clsx(
+          "aurora-flow pointer-events-none absolute -inset-4 -z-10 rounded-[34px] blur-2xl transition-opacity duration-300",
+          stage === "dragging" ? "aurora-flow-fast opacity-70" : "opacity-30",
+        )}
+      />
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (stage === "idle") setStage("dragging");
+        }}
+        onDragLeave={() => stage === "dragging" && setStage("idle")}
+        onDrop={onDrop}
+        className={clsx(
+          "aurora-flow relative overflow-hidden rounded-[26px] p-[1.5px] transition-all duration-300",
+          stage === "dragging" && "aurora-flow-fast",
+        )}
+      >
+        <div className="relative overflow-hidden rounded-[24px] bg-graphite p-5">
+          {stage === "dragging" && (
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-signal/60 animate-scanline" />
+          )}
 
-      {(stage === "idle" || stage === "dragging") && (
-        <div
-          onClick={tryClipboardTap}
-          className="flex cursor-pointer flex-col items-center gap-2.5 py-3 text-center"
-        >
-          <div className="flex h-9 w-9 items-center justify-center rounded-md border border-hairline bg-graphite-raised text-signal">
-            <ClipboardPaste size={17} strokeWidth={1.5} />
-          </div>
-          <p className="text-sm text-slate">
-            Нажмите, чтобы вставить, <br className="sm:hidden" />
-            или перетащите сюда
-          </p>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              fileInputRef.current?.click();
-            }}
-            className="mt-0.5 inline-flex items-center gap-1.5 text-xs font-medium text-slate hover:text-bone transition-colors"
-          >
-            <Upload size={13} strokeWidth={1.5} />
-            или загрузить файл
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            onClick={(e) => e.stopPropagation()}
-            onChange={(e) => e.target.files && handleFiles(e.target.files)}
-          />
-        </div>
-      )}
+          {idleStage && (
+            <div
+              onClick={tryClipboardTap}
+              className="flex cursor-pointer flex-col items-center gap-3.5 py-9 text-center"
+            >
+              <div className="aurora-flow flex h-16 w-16 items-center justify-center rounded-2xl p-[1.5px]">
+                <div className="flex h-full w-full items-center justify-center rounded-2xl bg-graphite-raised text-signal">
+                  <ClipboardPaste size={24} strokeWidth={1.5} />
+                </div>
+              </div>
+              <p className="text-base font-medium text-bone">
+                Нажмите, чтобы вставить, <br className="sm:hidden" />
+                или перетащите сюда
+              </p>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fileInputRef.current?.click();
+                }}
+                className="mt-0.5 inline-flex items-center gap-1.5 text-xs font-medium text-slate hover:text-bone transition-colors"
+              >
+                <Upload size={13} strokeWidth={1.5} />
+                или загрузить файл
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => e.target.files && handleFiles(e.target.files)}
+              />
+            </div>
+          )}
 
-      {stage === "uploading" && (
+          {stage === "uploading" && (
         <div className="flex flex-col items-center gap-3 py-10">
           <ProcessingReadout label="ЗАГРУЗКА" />
         </div>
@@ -375,7 +390,9 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
           onCancel={reset}
         />
       )}
-    </Card>
+        </div>
+      </div>
+    </div>
   );
 }
 

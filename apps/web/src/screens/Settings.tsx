@@ -1,27 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Check, UserRound, Info, ChevronRight } from "lucide-react";
+import { UserRound, Info } from "lucide-react";
 import clsx from "clsx";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
-import { Button, Card, ErrorState, Skeleton } from "../components/ui";
+import { Card } from "../components/ui";
+import { PLAN_TITLES } from "../components/PlanList";
 import { listPlans } from "../lib/api";
 import { useAuthStore } from "../state/auth";
 import { formatBytes } from "../lib/typeMeta";
-import { useToastStore } from "../state/toast";
-
-function rub(amount: number): string {
-  if (amount === 0) return "Бесплатно";
-  return `${amount.toLocaleString("ru-RU")} ₽/мес`;
-}
-
-const PLAN_TITLES: Record<string, string> = { free: "Free", pro: "Pro", pro_plus: "Premium" };
 
 export function SettingsScreen() {
   const navigate = useNavigate();
   const profile = useAuthStore((s) => s.profile);
-  const push = useToastStore((s) => s.push);
-  const { data: plans, isLoading, isError, refetch } = useQuery({ queryKey: ["plans"], queryFn: listPlans });
+  const { data: plans } = useQuery({ queryKey: ["plans"], queryFn: listPlans });
 
   const currentPlan = plans?.find((p) => p.id === profile?.plan);
 
@@ -50,70 +42,15 @@ export function SettingsScreen() {
           </Card>
         )}
 
-        <div className="space-y-2">
-          <p className="px-1 text-[11px] font-medium uppercase tracking-wider text-slate-dim">Тарифы</p>
-
-          {isLoading && (
-            <div className="space-y-2">
-              {[0, 1, 2].map((i) => (
-                <Skeleton key={i} className="h-28 w-full" />
-              ))}
-            </div>
-          )}
-
-          {isError && (
-            <Card>
-              <ErrorState title="Не удалось загрузить тарифы" onRetry={() => refetch()} />
-            </Card>
-          )}
-
-          {plans?.map((plan) => {
-            const isCurrent = plan.id === profile?.plan;
-            return (
-              <Card
-                key={plan.id}
-                className={clsx("space-y-3 p-4", isCurrent && "border-signal-dim/60")}
-              >
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-bone">{PLAN_TITLES[plan.id]}</p>
-                  <p className="font-mono text-sm text-bone tabular">{rub(plan.price_rub)}</p>
-                </div>
-                <ul className="space-y-1.5">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-xs text-slate">
-                      <Check size={13} strokeWidth={2} className="mt-0.5 shrink-0 text-moss" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                {isCurrent ? (
-                  <Button variant="secondary" disabled className="w-full">
-                    Текущий тариф
-                  </Button>
-                ) : (
-                  <Button
-                    variant={plan.id === "free" ? "secondary" : "signal"}
-                    className="w-full"
-                    onClick={() => push("Оплата подключается — скоро через Platega.io", "default")}
-                  >
-                    {plan.id === "free" ? "Понизить" : "Улучшить"}
-                  </Button>
-                )}
-              </Card>
-            );
-          })}
+        <div className="flex justify-center pt-2">
+          <button
+            onClick={() => navigate("/settings/info")}
+            className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-graphite px-3 py-1.5 text-xs text-slate transition-colors hover:border-hairline-strong hover:text-bone active:scale-[0.97]"
+          >
+            <Info size={13} strokeWidth={1.5} />
+            Info
+          </button>
         </div>
-
-        <button
-          onClick={() => navigate("/settings/info")}
-          className="flex w-full items-center gap-3 rounded-lg border border-hairline bg-graphite px-4 py-3 text-left transition-colors hover:border-hairline-strong active:scale-[0.99]"
-        >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-hairline bg-graphite-raised text-slate">
-            <Info size={15} strokeWidth={1.5} />
-          </div>
-          <p className="flex-1 text-sm font-medium text-bone">Информация</p>
-          <ChevronRight size={15} strokeWidth={1.5} className="shrink-0 text-slate-dim" />
-        </button>
       </main>
       <BottomNav />
     </div>

@@ -84,6 +84,27 @@
   }
 }
 
+/* Slow, smooth flowing gradient — used behind the capture frame on Inbox.
+   Plain background-position animation (no @property) so it renders
+   identically across Telegram's Android/iOS WebViews. */
+@keyframes aurora-flow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+.aurora-flow {
+  background-image: linear-gradient(115deg, #7c6cff, #4fb6d6, #6fbf8b, #f4a6d0, #7c6cff);
+  background-size: 300% 300%;
+  animation: aurora-flow 10s ease-in-out infinite;
+}
+.aurora-flow-fast {
+  animation-duration: 5s;
+}
+
 @keyframes scanline {
   0% {
     transform: translateY(-100%);

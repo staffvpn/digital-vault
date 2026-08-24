@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { Inbox, Lock, LayoutGrid, Search } from "lucide-react";
+import { Inbox, Lock, LayoutGrid, UserRound } from "lucide-react";
 import clsx from "clsx";
 import { haptic } from "../lib/telegram";
 
@@ -7,7 +7,7 @@ const items = [
   { to: "/", label: "Входящие", icon: Inbox, end: true },
   { to: "/vault", label: "Сейф", icon: Lock, end: false },
   { to: "/library", label: "Библиотека", icon: LayoutGrid, end: false },
-  { to: "/search", label: "Поиск", icon: Search, end: false },
+  { to: "/settings", label: "Профиль", icon: UserRound, end: false },
 ];
 
 export function BottomNav() {

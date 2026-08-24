@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, UserRound } from "lucide-react";
+import { ArrowLeft, Search } from "lucide-react";
 import { IconButton } from "./ui";
 
 export function Header({
@@ -7,11 +7,13 @@ export function Header({
   eyebrow,
   back,
   right,
+  hideSearch,
 }: {
   title: string;
   eyebrow?: string;
   back?: boolean;
   right?: React.ReactNode;
+  hideSearch?: boolean;
 }) {
   const navigate = useNavigate();
   return (
@@ -32,9 +34,11 @@ export function Header({
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {right}
-          <IconButton onClick={() => navigate("/settings")} aria-label="Профиль">
-            <UserRound size={16} strokeWidth={1.5} />
-          </IconButton>
+          {!hideSearch && (
+            <IconButton onClick={() => navigate("/search")} aria-label="Поиск">
+              <Search size={16} strokeWidth={1.5} />
+            </IconButton>
+          )}
         </div>
       </div>
     </header>

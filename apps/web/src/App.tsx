@@ -1,10 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Routes, Route } from "react-router-dom";
 import { Lock } from "lucide-react";
 import { useAuthStore } from "./state/auth";
 import { ProcessingReadout } from "./components/ProcessingReadout";
 import { Button } from "./components/ui";
 import { ToastHost } from "./components/ToastHost";
+import { Onboarding } from "./components/Onboarding";
 import { InboxScreen } from "./screens/Inbox";
 import { VaultScreen } from "./screens/Vault";
 import { LibraryHub } from "./screens/LibraryHub";
@@ -90,10 +91,22 @@ function AppRoutes() {
   );
 }
 
+const ONBOARDING_KEY = "vault_onboarding_seen";
+
 export default function App() {
+  const [showOnboarding, setShowOnboarding] = useState(
+    () => localStorage.getItem(ONBOARDING_KEY) !== "1",
+  );
+
+  const dismissOnboarding = () => {
+    localStorage.setItem(ONBOARDING_KEY, "1");
+    setShowOnboarding(false);
+  };
+
   return (
     <>
       <AuthGate />
+      {showOnboarding && <Onboarding onDone={dismissOnboarding} />}
       <ToastHost />
     </>
   );

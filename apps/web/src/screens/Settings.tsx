@@ -14,7 +14,7 @@ function rub(amount: number): string {
   return `${amount.toLocaleString("ru-RU")} ₽/мес`;
 }
 
-const PLAN_TITLES: Record<string, string> = { free: "Бесплатный", pro: "Про", pro_plus: "Про+" };
+const PLAN_TITLES: Record<string, string> = { free: "Free", pro: "Pro", pro_plus: "Premium" };
 
 export function SettingsScreen() {
   const profile = useAuthStore((s) => s.profile);
@@ -25,7 +25,7 @@ export function SettingsScreen() {
 
   return (
     <div className="mx-auto min-h-screen max-w-md pb-24">
-      <Header title="Аккаунт" eyebrow="Личное хранилище" back />
+      <Header title="Профиль" eyebrow="Личное хранилище" />
       <main className="space-y-5 px-4 pt-4">
         <Card className="flex items-center gap-3 p-4">
           <div className="flex h-11 w-11 items-center justify-center rounded-md border border-hairline bg-graphite-raised text-slate">

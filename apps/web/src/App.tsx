@@ -5,6 +5,7 @@ import { useAuthStore } from "./state/auth";
 import { ProcessingReadout } from "./components/ProcessingReadout";
 import { Button } from "./components/ui";
 import { ToastHost } from "./components/ToastHost";
+import { ImageLightbox } from "./components/ImageLightbox";
 import { Onboarding } from "./components/Onboarding";
 import { InboxScreen } from "./screens/Inbox";
 import { VaultScreen } from "./screens/Vault";
@@ -111,6 +112,7 @@ export default function App() {
     <>
       <AuthGate />
       {showOnboarding && <Onboarding onDone={dismissOnboarding} />}
+      <ImageLightbox />
       <ToastHost />
     </>
   );

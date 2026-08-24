@@ -7,16 +7,14 @@ import { FileThumb } from "../components/FileThumb";
 import { ItemActionsSheet } from "../components/ItemActionsSheet";
 import { Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { listItems } from "../lib/api";
-import { openItemContent } from "../lib/openItem";
+import { useLightboxStore } from "../state/lightbox";
 import { haptic } from "../lib/telegram";
-import { useToastStore } from "../state/toast";
 import type { VaultItem } from "../types";
 
 export function ImagesScreen() {
   const queryClient = useQueryClient();
-  const push = useToastStore((s) => s.push);
   const [selected, setSelected] = useState<VaultItem | null>(null);
-  const [openingId, setOpeningId] = useState<string | null>(null);
+  const openLightbox = useLightboxStore((s) => s.open);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["items", "image"],
@@ -25,17 +23,9 @@ export function ImagesScreen() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["items"] });
 
-  const openTile = async (item: VaultItem) => {
-    if (openingId) return;
+  const openTile = (item: VaultItem) => {
     haptic("light");
-    setOpeningId(item.id);
-    try {
-      await openItemContent(item);
-    } catch {
-      push("Не удалось открыть изображение", "error");
-    } finally {
-      setOpeningId(null);
-    }
+    openLightbox(item);
   };
 
   return (

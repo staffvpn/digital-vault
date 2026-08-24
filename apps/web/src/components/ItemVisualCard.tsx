@@ -3,6 +3,7 @@ import { MoreHorizontal } from "lucide-react";
 import { typeMeta } from "../lib/typeMeta";
 import { haptic } from "../lib/telegram";
 import { isOpenable, openItemContent } from "../lib/openItem";
+import { useLightboxStore } from "../state/lightbox";
 import { useToastStore } from "../state/toast";
 import type { VaultItem } from "../types";
 
@@ -11,6 +12,7 @@ export function ItemVisualCard({ item, onOpen }: { item: VaultItem; onOpen: () =
   const Icon = meta.icon;
   const [opening, setOpening] = useState(false);
   const push = useToastStore((s) => s.push);
+  const openLightbox = useLightboxStore((s) => s.open);
   const openable = isOpenable(item);
 
   const handlePrimaryTap = async () => {
@@ -18,8 +20,12 @@ export function ItemVisualCard({ item, onOpen }: { item: VaultItem; onOpen: () =
       onOpen();
       return;
     }
-    if (opening) return;
     haptic("light");
+    if (item.type === "image") {
+      openLightbox(item);
+      return;
+    }
+    if (opening) return;
     setOpening(true);
     try {
       await openItemContent(item);

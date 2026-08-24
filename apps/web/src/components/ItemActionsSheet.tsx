@@ -5,6 +5,7 @@ import { Button } from "./ui";
 import { deleteItem, updateItem } from "../lib/api";
 import { haptic } from "../lib/telegram";
 import { isOpenable, openItemContent } from "../lib/openItem";
+import { useLightboxStore } from "../state/lightbox";
 import { useToastStore } from "../state/toast";
 import type { VaultItem } from "../types";
 
@@ -22,6 +23,7 @@ export function ItemActionsSheet({
   const [category, setCategory] = useState("");
   const [opening, setOpening] = useState(false);
   const push = useToastStore((s) => s.push);
+  const openLightbox = useLightboxStore((s) => s.open);
 
   useEffect(() => {
     if (item) {
@@ -57,8 +59,13 @@ export function ItemActionsSheet({
   };
 
   const openLink = async () => {
-    if (opening) return;
     haptic("light");
+    if (item.type === "image") {
+      openLightbox(item);
+      onClose();
+      return;
+    }
+    if (opening) return;
     setOpening(true);
     try {
       await openItemContent(item);

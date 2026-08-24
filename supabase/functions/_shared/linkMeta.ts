@@ -44,6 +44,15 @@ async function fetchYoutubeOembed(targetUrl: string, domain: string): Promise<Li
   }
 }
 
+// A screenshot of the actual page communicates "what site is this" far
+// better than text ever does — but plenty of sites either have no og:image
+// or block scraping entirely. mshots is a free, keyless screenshot service
+// (used by Jetpack/WordPress.com) that renders any URL on demand and caches
+// the result, so it works as a universal fallback with zero setup.
+function mshotsFallback(targetUrl: string): string {
+  return `https://s.wordpress.com/mshots/v1/${encodeURIComponent(targetUrl)}?w=640`;
+}
+
 export async function fetchLinkMeta(targetUrl: string): Promise<LinkMeta> {
   const domain = new URL(targetUrl).hostname.replace(/^www\./, "");
   if (YOUTUBE_HOSTS.has(domain)) {
@@ -58,9 +67,17 @@ export async function fetchLinkMeta(targetUrl: string): Promise<LinkMeta> {
     const html = await res.text();
     const title = extractMeta(html, "og:title") ?? html.match(/<title>([^<]*)<\/title>/i)?.[1] ?? null;
     const description = extractMeta(html, "og:description") ?? extractMeta(html, "description");
-    const image = extractMeta(html, "og:image");
-    return { title, description, image, domain };
+    const rawImage = extractMeta(html, "og:image");
+    let image: string | null = null;
+    if (rawImage) {
+      try {
+        image = new URL(rawImage, targetUrl).toString();
+      } catch {
+        image = null;
+      }
+    }
+    return { title, description, image: image ?? mshotsFallback(targetUrl), domain };
   } catch {
-    return { title: null, description: null, image: null, domain };
+    return { title: null, description: null, image: mshotsFallback(targetUrl), domain };
   }
 }

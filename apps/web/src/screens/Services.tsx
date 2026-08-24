@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Wrench } from "lucide-react";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
-import { ItemRow } from "../components/ItemRow";
+import { ItemVisualCard } from "../components/ItemVisualCard";
 import { ItemActionsSheet } from "../components/ItemActionsSheet";
 import { Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { listItems } from "../lib/api";
@@ -25,17 +25,11 @@ export function ServicesScreen() {
       <Header title="Сервисы" eyebrow="Библиотека" back />
       <main className="px-4 pt-4">
         {isLoading && (
-          <Card className="divide-y divide-hairline p-0">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="flex items-center gap-3 px-4 py-3">
-                <Skeleton className="h-9 w-9" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-3.5 w-2/3" />
-                  <Skeleton className="h-3 w-1/3" />
-                </div>
-              </div>
+          <div className="grid grid-cols-2 gap-3">
+            {[0, 1, 2, 3].map((i) => (
+              <Skeleton key={i} className="aspect-[4/3] w-full" />
             ))}
-          </Card>
+          </div>
         )}
         {isError && (
           <Card>
@@ -48,11 +42,11 @@ export function ServicesScreen() {
           </Card>
         )}
         {!isLoading && !isError && data && data.length > 0 && (
-          <Card className="divide-y divide-hairline p-0">
+          <div className="grid grid-cols-2 gap-3">
             {data.map((item) => (
-              <ItemRow key={item.id} item={item} onOpen={() => setSelected(item)} />
+              <ItemVisualCard key={item.id} item={item} onOpen={() => setSelected(item)} />
             ))}
-          </Card>
+          </div>
         )}
       </main>
       <ItemActionsSheet item={selected} open={Boolean(selected)} onClose={() => setSelected(null)} onChanged={invalidate} />

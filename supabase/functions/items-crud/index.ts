@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
     if (q) {
       const like = `%${q}%`;
       query = query.or(
-        `title.ilike.${like},description.ilike.${like},ocr_text.ilike.${like},category.ilike.${like},source_domain.ilike.${like}`,
+        `title.ilike.${like},description.ilike.${like},body.ilike.${like},ocr_text.ilike.${like},category.ilike.${like},source_domain.ilike.${like}`,
       );
     }
 

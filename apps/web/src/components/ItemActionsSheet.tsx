@@ -97,6 +97,11 @@ export function ItemActionsSheet({
             {opening ? "Открываем…" : item.source_url ? "Открыть ссылку" : "Открыть"}
           </Button>
         )}
+        {item.body && (
+          <div className="max-h-64 overflow-y-auto rounded-md border border-hairline bg-graphite-raised px-3 py-2.5">
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-bone">{item.body}</p>
+          </div>
+        )}
         <div className="space-y-1.5">
           <label className="text-[10px] font-medium uppercase tracking-wider text-slate-dim">Категория</label>
           <input

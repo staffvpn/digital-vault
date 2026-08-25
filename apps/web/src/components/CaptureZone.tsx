@@ -5,6 +5,7 @@ import { ProcessingReadout } from "./ProcessingReadout";
 import { classifyContent, createItem, updateItem, uploadFile, createSecret } from "../lib/api";
 import { useToastStore } from "../state/toast";
 import { hapticNotify } from "../lib/telegram";
+import { guessCredentialFields, guessSecretName } from "../lib/credentialGuess";
 import type { ClassifyResult, ItemType } from "../types";
 
 // Everything here is designed around one rule: the person never has to
@@ -53,29 +54,6 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-function guessCredentialFields(text: string) {
-  const password = text.match(/password\s*[:=]\s*(\S+)/i)?.[1];
-  const username = text.match(/(?:username|login|email)\s*[:=]\s*(\S+)/i)?.[1];
-  return { password, username };
-}
-
-// Best-effort name for an auto-saved secret when the pasted text has no
-// explicit "name:" field — a nearby URL's domain is the strongest signal
-// ("github.com ... password: hunter2" -> "github.com").
-function guessSecretName(text: string): string {
-  const url = text.match(/https?:\/\/[^\s]+/i)?.[0];
-  if (url) {
-    try {
-      return new URL(url).hostname.replace(/^www\./, "");
-    } catch {
-      /* fall through */
-    }
-  }
-  const firstLine = text.split(/\r?\n/).find((l) => l.trim().length > 0 && l.trim().length < 60 && !/password|пароль/i.test(l));
-  if (firstLine) return firstLine.trim();
-  return `Секрет · ${new Date().toLocaleDateString("ru-RU")}`;
-}
-
 export function CaptureZone({ onSaved }: { onSaved: () => void }) {
   const [stage, setStage] = useState<Stage>("idle");
   const [savedFlash, setSavedFlash] = useState<SavedFlash | null>(null);
@@ -122,8 +100,12 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
     async (draft: Draft, result: ClassifyResult, linkMeta: LinkMeta | null) => {
       try {
         const title = result.title ?? linkMeta?.title ?? (draft.kind === "text" ? draft.content.slice(0, 80) : null);
-        const description =
-          result.description ?? (draft.kind === "text" ? draft.content : linkMeta?.description ?? null);
+        // description is the short AI-written summary used for search/cards —
+        // never the fallback for the real content. The full text (with its
+        // paragraphs intact) is preserved separately in `body`, or it's
+        // silently lost the moment the AI's summary is all that's kept.
+        const description = result.description ?? linkMeta?.description ?? null;
+        const body = draft.kind === "text" ? draft.content : null;
 
         if (draft.kind === "image" && draft.file) {
           // The image itself was only ever sent to the AI for classification —
@@ -144,6 +126,7 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
             subcategory: result.subcategory ?? null,
             title,
             description,
+            body,
             source_url: draft.kind === "url" ? draft.content : null,
             source_domain: linkMeta?.domain ?? null,
             preview_url: linkMeta?.image ?? null,

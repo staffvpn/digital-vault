@@ -118,13 +118,14 @@ export function InboxScreen() {
               isError={plansError}
               onRetry={() => refetchPlans()}
               onUpgrade={onUpgrade}
+              hasReferralDiscount={profile?.hasReferralDiscount}
             />
           </section>
         )}
 
         <section className="space-y-2">
           <SectionLabel>Свой тариф</SectionLabel>
-          <CustomPlanCard plans={plans} onCheckout={onCustomCheckout} />
+          <CustomPlanCard plans={plans} onCheckout={onCustomCheckout} hasReferralDiscount={profile?.hasReferralDiscount} />
         </section>
       </main>
       <ItemActionsSheet

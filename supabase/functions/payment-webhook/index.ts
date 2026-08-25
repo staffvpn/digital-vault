@@ -70,7 +70,12 @@ Deno.serve(async (req) => {
     }
 
     await supabase.from("profiles").update({ plan: body.plan }).eq("id", body.userId);
+    // Two separate perks, two separate people: the referrer's Vault-slot
+    // reward (fn_qualify_referral) and the invited person's own one-time
+    // 10% discount (fn_consume_referral_discount) — never on the custom
+    // plan, which doesn't go through this pro/pro_plus enum at all.
     await supabase.rpc("fn_qualify_referral", { p_referred_id: body.userId, p_plan: body.plan });
+    await supabase.rpc("fn_consume_referral_discount", { p_user_id: body.userId });
     return json({ ok: true });
   }
 

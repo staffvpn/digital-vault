@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
   const { data: config } = await supabase
     .from("app_config")
     .select("key, value")
-    .in("key", ["referral_reward_secrets", "referral_max_bonus_secrets"]);
+    .in("key", ["referral_reward_secrets_pro", "referral_reward_secrets_premium", "referral_max_bonus_secrets"]);
   const configMap = Object.fromEntries((config ?? []).map((c) => [c.key, c.value]));
 
   const { data: referrals } = await supabase
@@ -64,7 +64,10 @@ Deno.serve(async (req) => {
   return json({
     code: profile.referral_code,
     bonusSecrets: profile.secrets_bonus,
-    rewardPerReferral: configMap.referral_reward_secrets ?? 2,
+    rewardPerReferral: {
+      pro: configMap.referral_reward_secrets_pro ?? 2,
+      pro_plus: configMap.referral_reward_secrets_premium ?? 4,
+    },
     maxBonusSecrets: configMap.referral_max_bonus_secrets ?? 20,
     stats,
     referredUsers,

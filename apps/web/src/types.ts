@@ -23,6 +23,7 @@ export interface VaultItem {
   tags: string[];
   title: string | null;
   description: string | null;
+  body: string | null;
   source_url: string | null;
   source_domain: string | null;
   preview_url: string | null;
@@ -55,6 +56,7 @@ export interface Profile {
   secretsCount: number;
   secretsBonus: number;
   referralCode: string;
+  hasReferralDiscount: boolean;
 }
 
 export interface PlanInfo {
@@ -94,7 +96,7 @@ export interface ReferredUser {
 export interface ReferralInfo {
   code: string;
   bonusSecrets: number;
-  rewardPerReferral: number;
+  rewardPerReferral: { pro: number; pro_plus: number };
   maxBonusSecrets: number;
   stats: ReferralStats;
   referredUsers: ReferredUser[];

@@ -47,6 +47,12 @@ Deno.serve(async (req) => {
     // is no other code path that can set profiles.referred_by.
     if (tgUser.startParam) {
       await supabase.rpc("fn_attach_referrer", { p_new_user_id: profile.id, p_code: tgUser.startParam });
+      const { data: refreshed } = await supabase
+        .from("profiles")
+        .select("referred_by, referral_discount_used")
+        .eq("id", profile.id)
+        .single();
+      if (refreshed) profile = { ...profile, ...refreshed };
     }
   } else {
     await supabase
@@ -74,6 +80,10 @@ Deno.serve(async (req) => {
       secretsCount: profile.secrets_count,
       secretsBonus: profile.secrets_bonus,
       referralCode: profile.referral_code,
+      // One-time 10% off Pro/Premium for someone who signed up via a
+      // referral link and hasn't bought either yet — never applies to the
+      // custom plan.
+      hasReferralDiscount: Boolean(profile.referred_by) && !profile.referral_discount_used,
     },
   });
 });

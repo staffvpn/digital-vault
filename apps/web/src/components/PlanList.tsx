@@ -16,12 +16,16 @@ export function PlanList({
   isError,
   onRetry,
   onUpgrade,
+  hasReferralDiscount,
 }: {
   plans?: PlanInfo[];
   isLoading: boolean;
   isError: boolean;
   onRetry: () => void;
   onUpgrade: (plan: PlanInfo) => void;
+  // One-time 10% off Pro/Premium for someone who signed up via a referral
+  // link — never applies to the free plan or the custom-built one.
+  hasReferralDiscount?: boolean;
 }) {
   if (isLoading) {
     return (
@@ -43,12 +47,24 @@ export function PlanList({
 
   return (
     <div className="space-y-2">
-      {plans?.map((plan) => (
+      {plans?.map((plan) => {
+        const discounted = hasReferralDiscount && plan.id !== "free";
+        return (
         <Card key={plan.id} className="space-y-3 p-4">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-bone">{PLAN_TITLES[plan.id]}</p>
-            <p className="font-mono text-sm text-bone tabular">{rub(plan.price_rub)}</p>
+            {discounted ? (
+              <div className="flex items-center gap-1.5">
+                <span className="font-mono text-xs text-slate-dim line-through">{rub(plan.price_rub)}</span>
+                <span className="font-mono text-sm text-signal tabular">{rub(Math.round(plan.price_rub * 0.9))}</span>
+              </div>
+            ) : (
+              <p className="font-mono text-sm text-bone tabular">{rub(plan.price_rub)}</p>
+            )}
           </div>
+          {discounted && (
+            <p className="-mt-2 text-[11px] text-signal">-10% по реферальной ссылке · один раз</p>
+          )}
           <ul className="space-y-1.5">
             {plan.features.map((f) => (
               <li key={f} className={clsx("flex items-start gap-2 text-xs text-slate")}>
@@ -65,7 +81,8 @@ export function PlanList({
             {plan.id === "free" ? "Понизить" : "Улучшить"}
           </Button>
         </Card>
-      ))}
+        );
+      })}
     </div>
   );
 }

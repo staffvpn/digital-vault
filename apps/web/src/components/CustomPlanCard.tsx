@@ -12,9 +12,14 @@ function bytesToGb(bytes: number): number {
 export function CustomPlanCard({
   plans,
   onCheckout,
+  hasReferralDiscount,
 }: {
   plans?: PlanInfo[];
   onCheckout: (price: number, selection: CustomPlanSelection) => void;
+  // Shown, never applied: the referral discount is deliberately Pro/Premium
+  // only — a hand-assembled plan already prices flexibility at a premium,
+  // stacking a discount on top would undercut the ready-made plans further.
+  hasReferralDiscount?: boolean;
 }) {
   const [sel, setSel] = useState<CustomPlanSelection>({
     storageGb: CUSTOM_PLAN_LIMITS.storageGb.default,
@@ -94,6 +99,9 @@ export function CustomPlanCard({
           <span className="font-medium text-bone">{PLAN_TITLES[betterPreset.id]}</span> уже включает больше этого за{" "}
           {rub(betterPreset.price_rub)} — выгоднее готового пакета.
         </p>
+      )}
+      {hasReferralDiscount && (
+        <p className="text-[11px] text-slate-dim">Реферальная скидка 10% действует только на Pro и Premium, не на свой тариф.</p>
       )}
     </Card>
   );

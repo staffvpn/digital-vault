@@ -84,10 +84,16 @@ export function ReferralCard() {
         <div>
           <p className="text-sm font-semibold text-bone">Пригласить друга</p>
           <p className="text-xs text-slate-dim">
-            +{data.rewardPerReferral} места в Сейфе, когда друг оплатит Pro или Premium
+            +{data.rewardPerReferral.pro} места за Pro или +{data.rewardPerReferral.pro_plus} за Premium — когда друг
+            оплатит
           </p>
         </div>
       </div>
+
+      <p className="rounded-md border border-signal-dim/40 bg-signal/5 px-3 py-2 text-xs leading-relaxed text-slate">
+        Другу тоже выгодно: по вашей ссылке он получает <span className="text-bone">скидку 10%</span> на первую
+        оплату Pro или Premium.
+      </p>
 
       <div className="flex items-center gap-2 rounded-md border border-hairline bg-graphite-raised px-3 py-2">
         <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate">{link ?? data.code}</span>
@@ -123,6 +129,7 @@ export function ReferralCard() {
                 </div>
                 <span className={clsx("shrink-0 text-[11px] font-medium", STATUS_TONE[u.status])}>
                   {STATUS_LABEL[u.status]}
+                  {u.rewardAmount > 0 ? ` (+${u.rewardAmount})` : ""}
                 </span>
               </div>
             ))}

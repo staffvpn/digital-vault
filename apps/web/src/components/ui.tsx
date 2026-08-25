@@ -91,6 +91,36 @@ export function IconButton({ className, children, ...rest }: ButtonHTMLAttribute
   );
 }
 
+export function Switch({
+  checked,
+  onChange,
+  ariaLabel,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      onClick={() => onChange(!checked)}
+      className={clsx(
+        "relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-colors duration-200",
+        checked ? "bg-signal" : "bg-hairline-strong",
+      )}
+    >
+      <span
+        className={clsx(
+          "inline-block h-[18px] w-[18px] transform rounded-full bg-bone shadow transition-transform duration-200",
+          checked ? "translate-x-[19px]" : "translate-x-[3px]",
+        )}
+      />
+    </button>
+  );
+}
+
 export function Skeleton({ className }: { className?: string }) {
   return (
     <div

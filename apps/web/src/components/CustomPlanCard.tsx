@@ -1,9 +1,17 @@
 import { useMemo, useState } from "react";
 import { Sparkles } from "lucide-react";
-import { Button, Card } from "./ui";
+import { Button, Card, Switch } from "./ui";
 import { PLAN_TITLES, rub } from "./PlanList";
-import { CUSTOM_PLAN_LIMITS, customPlanPrice, type CustomPlanSelection } from "../lib/customPlanPricing";
+import {
+  CUSTOM_PLAN_LIMITS,
+  CUSTOM_FEATURE_TOGGLES,
+  customPlanPrice,
+  type CustomFeatureId,
+  type CustomPlanSelection,
+} from "../lib/customPlanPricing";
 import type { PlanInfo } from "../types";
+
+const TIER_RANK: Record<string, number> = { free: 0, pro: 1, pro_plus: 2 };
 
 function bytesToGb(bytes: number): number {
   return bytes / 1024 ** 3;
@@ -25,22 +33,37 @@ export function CustomPlanCard({
     storageGb: CUSTOM_PLAN_LIMITS.storageGb.default,
     aiCalls: CUSTOM_PLAN_LIMITS.aiCalls.default,
     secrets: CUSTOM_PLAN_LIMITS.secrets.default,
+    features: [],
   });
 
   const price = useMemo(() => customPlanPrice(sel), [sel]);
 
-  // If a ready-made plan already covers everything the sliders ask for,
-  // and does it for less, say so — the custom tier should stay honest
-  // about when a preset is simply the better deal.
+  const toggleFeature = (id: CustomFeatureId, on: boolean) => {
+    setSel((s) => ({
+      ...s,
+      features: on ? [...s.features, id] : s.features.filter((f) => f !== id),
+    }));
+  };
+
+  // If a ready-made plan already covers the sliders AND includes every
+  // toggled feature, and does it for less, say so — the custom tier should
+  // stay honest about when a preset is simply the better deal.
   const betterPreset = useMemo(() => {
-    const candidates = (plans ?? []).filter(
-      (p) =>
-        p.id !== "free" &&
+    const candidates = (plans ?? []).filter((p) => {
+      if (p.id === "free") return false;
+      const rank = TIER_RANK[p.id] ?? 0;
+      const coversFeatures = sel.features.every((id) => {
+        const def = CUSTOM_FEATURE_TOGGLES.find((f) => f.id === id);
+        return def ? rank >= TIER_RANK[def.includedFrom] : true;
+      });
+      return (
+        coversFeatures &&
         bytesToGb(p.storage_limit_bytes) >= sel.storageGb &&
         p.ai_calls_limit_per_month >= sel.aiCalls &&
         p.secrets_limit >= sel.secrets &&
-        p.price_rub < price,
-    );
+        p.price_rub < price
+      );
+    });
     candidates.sort((a, b) => a.price_rub - b.price_rub);
     return candidates[0];
   }, [plans, sel, price]);
@@ -53,7 +76,7 @@ export function CustomPlanCard({
         </div>
         <div>
           <p className="text-sm font-semibold text-bone">Свой тариф</p>
-          <p className="text-xs text-slate-dim">Соберите ресурсы под себя</p>
+          <p className="text-xs text-slate-dim">Соберите ресурсы и функции под себя</p>
         </div>
       </div>
 
@@ -81,6 +104,24 @@ export function CustomPlanCard({
         />
       </div>
 
+      <div className="space-y-0.5 border-t border-hairline pt-4">
+        <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-slate-dim">Дополнительные функции</p>
+        {CUSTOM_FEATURE_TOGGLES.map((f) => {
+          const on = sel.features.includes(f.id);
+          return (
+            <div key={f.id} className="flex items-center justify-between gap-3 py-2">
+              <div className="min-w-0">
+                <p className="text-sm text-bone">{f.label}</p>
+                <p className="truncate text-xs text-slate-dim">
+                  {f.hint} · +{f.priceRub} ₽/мес
+                </p>
+              </div>
+              <Switch checked={on} onChange={(v) => toggleFeature(f.id, v)} ariaLabel={f.label} />
+            </div>
+          );
+        })}
+      </div>
+
       <div className="flex items-end justify-between border-t border-hairline pt-4">
         <div>
           <p className="text-[10px] font-medium uppercase tracking-wider text-slate-dim">Цена</p>
@@ -96,7 +137,7 @@ export function CustomPlanCard({
 
       {betterPreset && (
         <p className="rounded-md border border-signal-dim/40 bg-signal/5 px-3 py-2 text-xs leading-relaxed text-slate">
-          <span className="font-medium text-bone">{PLAN_TITLES[betterPreset.id]}</span> уже включает больше этого за{" "}
+          <span className="font-medium text-bone">{PLAN_TITLES[betterPreset.id]}</span> уже включает всё это за{" "}
           {rub(betterPreset.price_rub)} — выгоднее готового пакета.
         </p>
       )}

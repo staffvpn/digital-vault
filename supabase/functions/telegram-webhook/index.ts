@@ -4,7 +4,6 @@ import { looksLikeCredential } from "./_shared/heuristics.ts";
 import { fetchLinkMeta } from "./_shared/linkMeta.ts";
 import { callClassifyModel, attachReminderTimestamps } from "./_shared/classify.ts";
 import { sendTelegramMessage } from "./_shared/telegramSend.ts";
-import { updatePinnedWidget } from "./_shared/pinnedWidget.ts";
 
 // Forward (or just type) anything straight to the bot in its private chat —
 // no need to open the Mini App at all. This is the direct answer to
@@ -40,7 +39,7 @@ Deno.serve(async (req) => {
   const supabase = supabaseAdmin();
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, plan, ai_calls_used, ai_calls_period_start")
+    .select("id, plan, ai_calls_used, ai_calls_period_start, storage_used_bytes")
     .eq("telegram_id", fromId)
     .maybeSingle();
 
@@ -78,10 +77,30 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
     const fileBytes = await fetch(`https://api.telegram.org/file/bot${botToken}/${filePath}`).then((r) => r.arrayBuffer());
+
+    const { data: planRowForStorage } = await supabase.from("plans").select("storage_limit_bytes").eq("id", profile.plan).single();
+    if (planRowForStorage && profile.storage_used_bytes + fileBytes.byteLength > planRowForStorage.storage_limit_bytes) {
+      await reply("Не хватает места в хранилище на вашем тарифе — освободите место или перейдите на тариф побольше в приложении.");
+      return json({ ok: true });
+    }
+
     const base64 = btoa(String.fromCharCode(...new Uint8Array(fileBytes)));
     const ocrEnabled = profile.plan !== "free";
     const aiResult = await callClassifyModel({ imageBase64: base64, mimeType: "image/jpeg" }, { includeOcr: ocrEnabled });
     if (aiResult) {
+      // Persist the actual bytes to Storage — the AI call above only ever
+      // saw a transient in-memory copy for classification, it was never
+      // kept anywhere on its own.
+      const storagePath = `${profile.id}/${crypto.randomUUID()}-telegram.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from("vault-files")
+        .upload(storagePath, fileBytes, { contentType: "image/jpeg" });
+
+      if (uploadError) {
+        await reply("Не удалось сохранить изображение 🙁");
+        return json({ ok: true });
+      }
+
       await supabase.from("usage_events").insert({ user_id: profile.id, kind: "ai_call" });
       await supabase.from("profiles").update({ ai_calls_used: aiCallsUsed + 1 }).eq("id", profile.id);
       const { data: item } = await supabase
@@ -99,6 +118,20 @@ Deno.serve(async (req) => {
         })
         .select("id, title")
         .single();
+
+      if (item) {
+        await supabase.from("files").insert({
+          user_id: profile.id,
+          item_id: item.id,
+          storage_path: storagePath,
+          mime_type: "image/jpeg",
+          size_bytes: fileBytes.byteLength,
+        });
+        await supabase
+          .from("profiles")
+          .update({ storage_used_bytes: profile.storage_used_bytes + fileBytes.byteLength })
+          .eq("id", profile.id);
+      }
       saved = item;
     }
   } else if (text?.trim()) {
@@ -172,7 +205,6 @@ Deno.serve(async (req) => {
 
   if (saved) {
     await reply(`✅ Сохранено: ${saved.title ?? "без названия"}`);
-    await updatePinnedWidget(supabase, botToken, profile.id);
   } else {
     await reply("Не удалось разобрать — попробуйте ещё раз или через приложение.");
   }

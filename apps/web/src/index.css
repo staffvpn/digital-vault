@@ -134,6 +134,60 @@
   animation: blink-caret 1s step-end infinite;
 }
 
+/* Custom-plan sliders. Native <input type="range"> for reliable touch/drag
+   behaviour inside Telegram's WebViews, restyled to a thin signal-blue
+   track with a plain bone thumb — deliberately quiet, no gradient/glow
+   candy, matching the rest of the app's instrument-panel language. */
+.slider-signal {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-hairline-strong);
+  outline: none;
+  touch-action: pan-y;
+}
+.slider-signal::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: transparent;
+}
+.slider-signal::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--color-bone);
+  border: 3px solid var(--color-signal);
+  margin-top: -8px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.slider-signal::-webkit-slider-thumb:active {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-signal) 20%, transparent);
+}
+.slider-signal::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-hairline-strong);
+}
+.slider-signal::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--color-bone);
+  border: 3px solid var(--color-signal);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.slider-signal::-moz-range-thumb:active {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-signal) 20%, transparent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

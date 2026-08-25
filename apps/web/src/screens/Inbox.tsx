@@ -6,10 +6,13 @@ import { CaptureZone } from "../components/CaptureZone";
 import { ItemRow } from "../components/ItemRow";
 import { ItemActionsSheet } from "../components/ItemActionsSheet";
 import { PlanList, PLAN_TITLES, rub } from "../components/PlanList";
+import { CustomPlanCard } from "../components/CustomPlanCard";
+import { ReferralCard } from "../components/ReferralCard";
 import { Badge, Card, ErrorState, SectionLabel, Skeleton } from "../components/ui";
 import { listItems, listPlans, updateItem } from "../lib/api";
 import { useAuthStore } from "../state/auth";
 import { useToastStore } from "../state/toast";
+import type { CustomPlanSelection } from "../lib/customPlanPricing";
 import type { PlanInfo, VaultItem } from "../types";
 
 export function InboxScreen() {
@@ -44,6 +47,8 @@ export function InboxScreen() {
   const otherPlans = plans?.filter((p) => p.id !== profile?.plan);
 
   const onUpgrade = (_plan: PlanInfo) => push("Оплата подключается — скоро через Platega.io", "default");
+  const onCustomCheckout = (_price: number, _sel: CustomPlanSelection) =>
+    push("Оплата подключается — скоро через Platega.io", "default");
 
   return (
     <div className="mx-auto min-h-screen max-w-md pb-24">
@@ -115,6 +120,18 @@ export function InboxScreen() {
               onRetry={() => refetchPlans()}
               onUpgrade={onUpgrade}
             />
+          </section>
+        )}
+
+        <section className="space-y-2">
+          <SectionLabel>Свой тариф</SectionLabel>
+          <CustomPlanCard plans={plans} onCheckout={onCustomCheckout} />
+        </section>
+
+        {(profile?.plan === "pro" || profile?.plan === "pro_plus") && (
+          <section className="space-y-2">
+            <SectionLabel>Приглашения</SectionLabel>
+            <ReferralCard />
           </section>
         )}
       </main>

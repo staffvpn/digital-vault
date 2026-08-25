@@ -53,6 +53,8 @@ export interface Profile {
   storageUsedBytes: number;
   aiCallsUsed: number;
   secretsCount: number;
+  secretsBonus: number;
+  referralCode: string;
 }
 
 export interface PlanInfo {
@@ -62,6 +64,23 @@ export interface PlanInfo {
   ai_calls_limit_per_month: number;
   secrets_limit: number;
   features: string[];
+}
+
+export interface ReferralStats {
+  registered: number;
+  paid: number;
+  qualified: number;
+  rewarded: number;
+  blocked: number;
+  refunded: number;
+}
+
+export interface ReferralInfo {
+  code: string;
+  bonusSecrets: number;
+  rewardPerReferral: number;
+  maxBonusSecrets: number;
+  stats: ReferralStats;
 }
 
 export interface ClassifyResult {

@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("plan, secrets_count")
+      .select("plan, secrets_count, secrets_bonus")
       .eq("id", session.userId)
       .single();
     const { data: plan } = await supabase
@@ -56,8 +56,10 @@ Deno.serve(async (req) => {
       .select("secrets_limit")
       .eq("id", profile?.plan ?? "free")
       .single();
-    if (plan && profile && profile.secrets_count >= plan.secrets_limit) {
-      return json({ error: "secrets_limit_reached", limit: plan.secrets_limit }, 402);
+    // Referral bonuses add Vault slots on top of the plan's base limit.
+    const effectiveLimit = (plan?.secrets_limit ?? 0) + (profile?.secrets_bonus ?? 0);
+    if (plan && profile && profile.secrets_count >= effectiveLimit) {
+      return json({ error: "secrets_limit_reached", limit: effectiveLimit }, 402);
     }
 
     const encrypted = await encryptSecret(body.password, vaultKey);

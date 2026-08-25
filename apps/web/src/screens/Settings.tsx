@@ -38,7 +38,12 @@ export function SettingsScreen() {
             <p className="text-[11px] font-medium uppercase tracking-wider text-slate-dim">Расход</p>
             <UsageRow label="Хранилище" used={profile.storageUsedBytes} limit={currentPlan.storage_limit_bytes} format={formatBytes} />
             <UsageRow label="AI-операции" used={profile.aiCallsUsed} limit={currentPlan.ai_calls_limit_per_month} format={(n) => `${n}`} />
-            <UsageRow label="Секреты" used={profile.secretsCount} limit={currentPlan.secrets_limit} format={(n) => `${n}`} />
+            <UsageRow
+              label="Секреты"
+              used={profile.secretsCount}
+              limit={currentPlan.secrets_limit + profile.secretsBonus}
+              format={(n) => `${n}`}
+            />
           </Card>
         )}
 

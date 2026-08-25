@@ -22,6 +22,11 @@ export interface TelegramUser {
   id: number;
   username?: string;
   first_name?: string;
+  // Present when the Mini App was opened via a `t.me/<bot>?startapp=CODE`
+  // deep link. This comes straight out of the HMAC-signed initData, so —
+  // unlike a value the client could pass separately in a request body —
+  // it can be trusted as genuinely what Telegram handed the user.
+  startParam?: string;
 }
 
 export async function verifyInitData(
@@ -50,7 +55,10 @@ export async function verifyInitData(
   const userRaw = params.get("user");
   if (!userRaw) return null;
   try {
-    return JSON.parse(userRaw) as TelegramUser;
+    const user = JSON.parse(userRaw) as TelegramUser;
+    const startParam = params.get("start_param");
+    if (startParam) user.startParam = startParam;
+    return user;
   } catch {
     return null;
   }

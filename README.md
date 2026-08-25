@@ -8,8 +8,9 @@ Personal Digital Vault — Telegram Mini App для хранения и AI-ор�
 
 - `apps/web` — React + TypeScript + Vite + Tailwind фронтенд (Mini App UI).
 - `supabase/migrations` — схема Postgres (RLS deny-all, только через Edge Functions).
-- `supabase/functions` — 7 Edge Functions: `auth-telegram`, `items-crud`,
-  `secrets-crud`, `classify-item`, `link-metadata`, `files-upload`, `files-url`.
+- `supabase/functions` — 9 Edge Functions: `auth-telegram`, `items-crud`,
+  `secrets-crud`, `classify-item`, `link-metadata`, `files-upload`, `files-url`,
+  `referrals`, `payment-webhook`.
 
 Backend уже развёрнут в Supabase-проекте `digital-vault`
 (`etvnsrvenbsqxhosmuhw`, регион eu-west-1, Free-тариф).
@@ -56,10 +57,29 @@ dev-режиме есть кнопка «Предпросмотр без Telegra
 
 3. **Деплой фронтенда** — любой статический хостинг (Cloudflare Pages,
    Vercel, Netlify): команда сборки `npm run build` в `apps/web`, папка
-   `dist`. Прописать те же `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`
-   как переменные окружения хостинга.
+   `dist`. Прописать `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` как
+   переменные окружения хостинга, плюс (опционально, для полных
+   реферальных ссылок) `VITE_TELEGRAM_BOT_USERNAME` — username бота без
+   `@`. Без неё реферальный блок покажет только код приглашения вместо
+   готовой ссылки `t.me/<bot>?startapp=<код>`.
 
-## Оплата (Pro / Pro+)
+## Оплата (Pro / Premium / свой тариф)
 
-Сейчас — только схема тарифов и paywall UI (цены в ₽). Реальная интеграция
-Platega.io — отдельная следующая фаза.
+Сейчас — только схема тарифов, калькулятор своего тарифа и paywall UI
+(цены в ₽); нажатие «Оформить» показывает тост «Оплата подключается».
+Готова серверная часть, к которой предстоит подключить реального
+провайдера:
+
+- `payments` / `referrals` таблицы и SQL-функции `fn_qualify_referral` /
+  `fn_reverse_referral` (`supabase/migrations/0002_referrals_and_custom_plan.sql`)
+  реализуют реферальные бонусы строго за подтверждённую оплату Pro/Premium
+  (не за регистрацию), с защитой от self-referral, повторных начислений,
+  автовозврата бонуса при рефанде и лимитом бонуса на аккаунт — параметры
+  вынесены в таблицу `app_config`, меняются без передеплоя.
+- `payment-webhook` Edge Function — точка, куда должен стучаться реальный
+  провайдер (Platega.io и т.п.) после оплаты/рефанда. По умолчанию
+  отклоняет всё: нужно один раз задать секрет `PAYMENT_WEBHOOK_SECRET`
+  (Supabase Dashboard → Edge Functions → Secrets) и настроить у провайдера
+  отправку этого значения в заголовке `X-Webhook-Secret`, плюс — перед
+  реальным запуском — заменить сверку по секрету проверкой подписи
+  провайдера согласно его документации.

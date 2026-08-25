@@ -133,3 +133,7 @@ export async function listPlans() {
   if (error) throw new ApiError(error.message);
   return data as PlanInfo[];
 }
+
+export async function getReferralInfo() {
+  return call<import("../types").ReferralInfo>("referrals");
+}

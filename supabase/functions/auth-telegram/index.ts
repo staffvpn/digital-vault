@@ -41,6 +41,13 @@ Deno.serve(async (req) => {
       .single();
     if (error) return json({ error: "profile_create_failed", detail: error.message }, 500);
     profile = created;
+
+    // Referral attach happens exactly once, right here, only for a brand
+    // new profile, and only from Telegram's own signed start_param — there
+    // is no other code path that can set profiles.referred_by.
+    if (tgUser.startParam) {
+      await supabase.rpc("fn_attach_referrer", { p_new_user_id: profile.id, p_code: tgUser.startParam });
+    }
   } else {
     await supabase
       .from("profiles")
@@ -65,6 +72,8 @@ Deno.serve(async (req) => {
       storageUsedBytes: profile.storage_used_bytes,
       aiCallsUsed: profile.ai_calls_used,
       secretsCount: profile.secrets_count,
+      secretsBonus: profile.secrets_bonus,
+      referralCode: profile.referral_code,
     },
   });
 });

@@ -1,4 +1,4 @@
-# Digital Vault
+# NCHT Notion
 
 Personal Digital Vault — Telegram Mini App для хранения и AI-организации
 цифровых материалов. Полная концепция и архитектура: см.

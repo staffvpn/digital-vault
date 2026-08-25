@@ -1,4 +1,4 @@
--- Digital Vault — initial schema
+-- NCHT Notion — initial schema
 -- All tables are accessed exclusively through Edge Functions using the
 -- service role. RLS is enabled everywhere with no grants to anon/authenticated
 -- as defense in depth: PostgREST direct access is fully closed.

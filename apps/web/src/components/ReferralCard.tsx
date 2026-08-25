@@ -41,7 +41,7 @@ export function ReferralCard() {
   if (!data) return null;
 
   const link = BOT_USERNAME ? `https://t.me/${BOT_USERNAME}?startapp=${data.code}` : null;
-  const shareText = `Digital Vault — сохраняю ссылки, файлы и пароли, ИИ сам всё раскладывает. Заходи: ${link ?? data.code}`;
+  const shareText = `NCHT Notion — сохраняю ссылки, файлы и пароли, ИИ сам всё раскладывает. Заходи: ${link ?? data.code}`;
 
   const copy = async () => {
     try {

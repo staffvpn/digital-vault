@@ -45,7 +45,7 @@ function AuthGate() {
 
       {status === "no_telegram" && (
         <>
-          <p className="text-sm font-medium text-bone">Откройте Vault через Telegram</p>
+          <p className="text-sm font-medium text-bone">Откройте NCHT Notion через Telegram</p>
           <p className="max-w-xs text-xs leading-relaxed text-slate">
             Это приложение работает как Telegram Mini App и не открывается напрямую в браузере.
           </p>

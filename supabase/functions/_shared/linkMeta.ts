@@ -64,7 +64,7 @@ export async function fetchLinkMeta(targetUrl: string): Promise<LinkMeta> {
   }
   try {
     const res = await fetch(targetUrl, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; DigitalVaultBot/1.0)" },
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; NCHTNotionBot/1.0)" },
       signal: AbortSignal.timeout(6000),
     });
     const html = await res.text();

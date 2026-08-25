@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import clsx from "clsx";
-import { ClipboardPaste, Upload, Check, KeyRound } from "lucide-react";
+import { ClipboardPaste, Upload, Check, KeyRound, Copy } from "lucide-react";
 import { ProcessingReadout } from "./ProcessingReadout";
 import { classifyContent, createItem, updateItem, uploadFile, createSecret } from "../lib/api";
 import { useToastStore } from "../state/toast";
@@ -33,7 +33,7 @@ interface Draft {
 interface SavedFlash {
   title: string;
   sub: string;
-  tone: "success" | "secret";
+  tone: "success" | "secret" | "duplicate";
 }
 
 function isUrl(text: string): boolean {
@@ -159,7 +159,11 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
     async (d: Draft) => {
       setStage("processing");
       try {
-        const { result, linkMeta } = await classifyContent({ kind: d.kind, content: d.content, mimeType: d.mimeType });
+        const { result, linkMeta, existingItem } = await classifyContent({ kind: d.kind, content: d.content, mimeType: d.mimeType });
+        if (result.type === "duplicate") {
+          flashSaved({ title: existingItem?.title ?? "Уже сохранено", sub: "Уже есть в коллекции", tone: "duplicate" });
+          return;
+        }
         if (result.type === "possible_credential") {
           hapticNotify("warning");
           await autoSaveSecret(d.raw);
@@ -171,7 +175,7 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
         setStage("idle");
       }
     },
-    [autoSaveSecret, autoSaveItem, push],
+    [autoSaveSecret, autoSaveItem, flashSaved, push],
   );
 
   const handleFiles = useCallback(
@@ -354,11 +358,15 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
               <div
                 className={clsx(
                   "flex h-11 w-11 items-center justify-center rounded-full border",
-                  savedFlash.tone === "secret" ? "border-signal-dim/60 bg-signal/10 text-signal" : "border-moss/40 bg-moss/10 text-moss",
+                  savedFlash.tone === "secret" && "border-signal-dim/60 bg-signal/10 text-signal",
+                  savedFlash.tone === "duplicate" && "border-slate-dim/40 bg-graphite-raised text-slate",
+                  savedFlash.tone === "success" && "border-moss/40 bg-moss/10 text-moss",
                 )}
               >
                 {savedFlash.tone === "secret" ? (
                   <KeyRound size={18} strokeWidth={2} />
+                ) : savedFlash.tone === "duplicate" ? (
+                  <Copy size={18} strokeWidth={1.5} />
                 ) : (
                   <Check size={20} strokeWidth={2} />
                 )}

@@ -93,10 +93,46 @@ export async function deleteSecret(id: string) {
 }
 
 export async function classifyContent(payload: { kind: "url" | "text" | "image"; content: string; mimeType?: string }) {
-  return call<{ result: ClassifyResult; source: string; linkMeta?: unknown }>("classify-item", {
+  return call<{ result: ClassifyResult; source: string; linkMeta?: unknown; existingItem?: VaultItem }>("classify-item", {
     method: "POST",
     body: payload,
   });
+}
+
+export async function summarizeLink(itemId: string) {
+  return call<{ summary: string; cached: boolean }>("summarize-link", { method: "POST", body: { item_id: itemId } });
+}
+
+export async function listCollections() {
+  const { collections } = await call<{ collections: import("../types").Collection[] }>("collections");
+  return collections;
+}
+
+export async function getCollection(id: string) {
+  return call<{ collection: import("../types").Collection; items: VaultItem[]; memberCount: number; myRole: string }>(
+    "collections",
+    { query: { id } },
+  );
+}
+
+export async function createCollection(name: string) {
+  const { collection } = await call<{ collection: import("../types").Collection }>("collections", {
+    method: "POST",
+    body: { action: "create", name },
+  });
+  return collection;
+}
+
+export async function addItemToCollection(collectionId: string, itemId: string) {
+  await call("collections", { method: "POST", body: { action: "add_item", collection_id: collectionId, item_id: itemId } });
+}
+
+export async function removeItemFromCollection(collectionId: string, itemId: string) {
+  await call("collections", { method: "POST", body: { action: "remove_item", collection_id: collectionId, item_id: itemId } });
+}
+
+export async function deleteCollection(id: string) {
+  await call("collections", { method: "DELETE", query: { id } });
 }
 
 export async function fetchLinkMetadata(targetUrl: string) {

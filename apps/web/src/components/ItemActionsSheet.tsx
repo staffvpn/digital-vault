@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
-import { Trash2, Check, ExternalLink } from "lucide-react";
+import { Trash2, Check, ExternalLink, Sparkles, FolderPlus, ScanSearch } from "lucide-react";
 import { Sheet } from "./Sheet";
 import { Button } from "./ui";
-import { deleteItem, updateItem } from "../lib/api";
+import { ApiError, deleteItem, summarizeLink, updateItem } from "../lib/api";
 import { haptic } from "../lib/telegram";
 import { isOpenable, openItemContent } from "../lib/openItem";
 import { useLightboxStore } from "../state/lightbox";
 import { useToastStore } from "../state/toast";
+import { useAuthStore } from "../state/auth";
 import { FileThumb } from "./FileThumb";
+import { SimilarItemsSheet } from "./SimilarItemsSheet";
+import { CollectionPickerSheet } from "./CollectionPickerSheet";
 import type { VaultItem } from "../types";
 
 export function ItemActionsSheet({
@@ -23,16 +26,40 @@ export function ItemActionsSheet({
 }) {
   const [category, setCategory] = useState("");
   const [opening, setOpening] = useState(false);
+  const [similarOpen, setSimilarOpen] = useState(false);
+  const [collectionOpen, setCollectionOpen] = useState(false);
+  const [summary, setSummary] = useState<string | null>(null);
+  const [summarizing, setSummarizing] = useState(false);
   const push = useToastStore((s) => s.push);
   const openLightbox = useLightboxStore((s) => s.open);
+  const profile = useAuthStore((s) => s.profile);
 
   useEffect(() => {
     if (item) {
       setCategory(item.category ?? "");
+      setSummary(item.summary ?? null);
     }
   }, [item]);
 
   if (!item) return null;
+
+  const summarize = async () => {
+    if (summarizing) return;
+    setSummarizing(true);
+    try {
+      const { summary: text } = await summarizeLink(item.id);
+      setSummary(text);
+      onChanged();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 402) {
+        push("Пересказ статей — на тарифе Premium", "error");
+      } else {
+        push("Не удалось пересказать", "error");
+      }
+    } finally {
+      setSummarizing(false);
+    }
+  };
 
   const save = async () => {
     try {
@@ -78,6 +105,7 @@ export function ItemActionsSheet({
   };
 
   return (
+    <>
     <Sheet open={open} onClose={onClose} title={item.title ?? "Без названия"}>
       <div className="space-y-3">
         {(item.type === "image" || item.preview_url) && (
@@ -102,6 +130,32 @@ export function ItemActionsSheet({
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-bone">{item.body}</p>
           </div>
         )}
+
+        {summary && (
+          <div className="space-y-1 rounded-md border border-signal-dim/40 bg-signal/5 px-3 py-2.5">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-signal">Пересказ</p>
+            <p className="text-sm leading-relaxed text-bone">{summary}</p>
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setSimilarOpen(true)} className="flex-1">
+            <ScanSearch size={13} strokeWidth={1.5} />
+            Похожее
+          </Button>
+          <Button variant="secondary" onClick={() => setCollectionOpen(true)} className="flex-1">
+            <FolderPlus size={13} strokeWidth={1.5} />
+            В подборку
+          </Button>
+        </div>
+
+        {item.source_url && !summary && (
+          <Button variant="secondary" onClick={summarize} className="w-full" disabled={summarizing}>
+            <Sparkles size={13} strokeWidth={1.5} />
+            {summarizing ? "Читаем…" : profile?.plan === "pro_plus" ? "Пересказ за 30 секунд" : "Пересказ за 30 секунд (Premium)"}
+          </Button>
+        )}
+
         <div className="space-y-1.5">
           <label className="text-[10px] font-medium uppercase tracking-wider text-slate-dim">Категория</label>
           <input
@@ -122,5 +176,9 @@ export function ItemActionsSheet({
         </div>
       </div>
     </Sheet>
+
+    <SimilarItemsSheet item={item} open={similarOpen} onClose={() => setSimilarOpen(false)} />
+    <CollectionPickerSheet itemId={item.id} open={collectionOpen} onClose={() => setCollectionOpen(false)} />
+    </>
   );
 }

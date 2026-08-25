@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Palette, Bookmark, PlaySquare, Wrench, Image as ImageIcon, FolderOpen, StickyNote, Bell, ChevronRight } from "lucide-react";
+import { Palette, Bookmark, PlaySquare, Wrench, Image as ImageIcon, FolderOpen, StickyNote, Bell, Users, ChevronRight } from "lucide-react";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
 import { Card } from "../components/ui";
@@ -13,6 +13,7 @@ const sections = [
   { to: "/library/files", label: "Файлы", desc: "Документы и файлы", icon: FolderOpen },
   { to: "/library/notes", label: "Заметки", desc: "Быстрые заметки", icon: StickyNote },
   { to: "/library/reminders", label: "Напоминания", desc: "Задачи с датой и уведомлением", icon: Bell },
+  { to: "/library/collections", label: "Подборки", desc: "Совместные списки с друзьями", icon: Users },
 ];
 
 export function LibraryHub() {

@@ -61,6 +61,17 @@ Deno.serve(async (req) => {
       .eq("id", profile.id);
   }
 
+  // Collection-join links (start_param "col_<code>") work for any user, on
+  // every login — unlike referral attach, joining a shared collection isn't
+  // a sensitive one-time thing, so it's safe to re-check and is a no-op if
+  // already a member.
+  if (tgUser.startParam?.startsWith("col_")) {
+    await supabase.rpc("fn_join_collection", {
+      p_user_id: profile.id,
+      p_share_code: tgUser.startParam.slice(4),
+    });
+  }
+
   const sessionToken = await createSessionToken(
     { sub: profile.id, telegram_id: tgUser.id },
     sessionSecret,

@@ -1,6 +1,19 @@
 import { handleOptions, json } from "./_shared/cors.ts";
 import { requireSession } from "./_shared/auth.ts";
 import { supabaseAdmin } from "./_shared/supabaseAdmin.ts";
+import { updatePinnedWidget } from "./_shared/pinnedWidget.ts";
+
+// deno-lint-ignore no-explicit-any
+function maybeUpdateWidget(supabase: any, userId: string) {
+  // Fire-and-forget — Pro/Premium perk, must never slow down or fail a save.
+  // waitUntil keeps it running after the response is sent instead of the
+  // isolate tearing down mid-request.
+  const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
+  if (!botToken) return;
+  const task = updatePinnedWidget(supabase, botToken, userId).catch(() => {});
+  // deno-lint-ignore no-explicit-any
+  (globalThis as any).EdgeRuntime?.waitUntil?.(task);
+}
 
 Deno.serve(async (req) => {
   const opt = handleOptions(req);
@@ -47,6 +60,7 @@ Deno.serve(async (req) => {
       .select("*")
       .single();
     if (error) return json({ error: error.message }, 500);
+    if (data.status === "saved") maybeUpdateWidget(supabase, session.userId);
     return json({ item: data }, 201);
   }
 
@@ -62,6 +76,7 @@ Deno.serve(async (req) => {
       .select("*")
       .single();
     if (error) return json({ error: error.message }, 500);
+    if (fields.status === "saved") maybeUpdateWidget(supabase, session.userId);
     return json({ item: data });
   }
 

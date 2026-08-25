@@ -8,9 +8,10 @@ Personal Digital Vault — Telegram Mini App для хранения и AI-ор�
 
 - `apps/web` — React + TypeScript + Vite + Tailwind фронтенд (Mini App UI).
 - `supabase/migrations` — схема Postgres (RLS deny-all, только через Edge Functions).
-- `supabase/functions` — 11 Edge Functions: `auth-telegram`, `items-crud`,
+- `supabase/functions` — 15 Edge Functions: `auth-telegram`, `items-crud`,
   `secrets-crud`, `classify-item`, `link-metadata`, `files-upload`, `files-url`,
-  `referrals`, `payment-webhook`, `transcribe-audio`, `deliver-reminders`.
+  `referrals`, `payment-webhook`, `transcribe-audio`, `deliver-reminders`,
+  `telegram-webhook`, `setup-webhook`, `summarize-link`, `collections`.
 
 Backend уже развёрнут в Supabase-проекте `digital-vault`
 (`etvnsrvenbsqxhosmuhw`, регион eu-west-1, Free-тариф).
@@ -56,9 +57,22 @@ dev-режиме есть кнопка «Предпросмотр без Telegra
      reminders will never actually be delivered even though everything else
      about them works.
 
+   - `TELEGRAM_WEBHOOK_SECRET` — must be exactly `75dec84da4669a031a9b3138d41d735fc85f72d965e34676`
+     (same reasoning as `CRON_SECRET` above: this exact value is what
+     `setup-webhook` will register with Telegram as the `secret_token`, and
+     what `telegram-webhook` checks on every incoming update — they have to
+     match). Once this is set, trigger the one-time webhook registration:
+     ```bash
+     curl -X POST "https://etvnsrvenbsqxhosmuhw.supabase.co/functions/v1/setup-webhook" \
+       -H "X-Setup-Secret: 75dec84da4669a031a9b3138d41d735fc85f72d965e34676"
+     ```
+     After that, forwarding or typing a message directly to the bot in its
+     private chat saves it — no Mini App needed. Safe to re-run any time
+     (idempotent).
+
    Или через CLI после `supabase link`:
    ```bash
-   supabase secrets set TELEGRAM_BOT_TOKEN=... SESSION_SECRET=... VAULT_ENCRYPTION_KEY=... POLZA_API_KEY=... CRON_SECRET=...
+   supabase secrets set TELEGRAM_BOT_TOKEN=... SESSION_SECRET=... VAULT_ENCRYPTION_KEY=... POLZA_API_KEY=... CRON_SECRET=... TELEGRAM_WEBHOOK_SECRET=...
    ```
 
 2. **@BotFather** → ваш бот → Bot Settings → Menu Button → указать URL
@@ -94,6 +108,33 @@ dev-режиме есть кнопка «Предпросмотр без Telegra
 (`migrations/0005`) и шлёт уведомление в Telegram через Bot API, когда
 время подходит. Список и отметка «выполнено» — экран «Напоминания» в
 Библиотеке.
+
+## Дедуп, OCR, пересказ, «Похожее», виджет, подборки
+
+- **Дедупликация** (все тарифы) — `classify-item` проверяет `source_url` до
+  вызова ИИ; повтор той же ссылки возвращает `type: "duplicate"` вместо
+  создания второй записи и не тратит AI-лимит.
+- **Пересылка боту** (все тарифы) — `telegram-webhook` (после
+  `setup-webhook`, см. выше) принимает текст/фото прямо в чате с ботом и
+  прогоняет через тот же классификатор, что и Mini App.
+- **OCR** (Pro/Premium) — при классификации картинки `classify-item`
+  дополнительно просит модель продублировать видимый текст в `ocr_text`
+  (колонка существовала в схеме, но не использовалась) — участвует в поиске.
+- **«Похожее»** (все тарифы) — `SimilarItemsSheet`, поиск по ключевым словам
+  из title/category через существующий индекс, без embeddings/вектора.
+- **Пересказ статьи** (Premium) — `summarize-link`: фетчит страницу,
+  снимает разметку, просит модель пересказать в 4-6 предложений, кэширует
+  в `items.summary`.
+- **Закреплённый виджет** (Pro/Premium) — `_shared/pinnedWidget.ts`,
+  вызывается из `items-crud` (после любого сохранения из Mini App) и
+  `telegram-webhook` (после пересылки): редактирует/закрепляет сообщение
+  с последними 5 сохранениями в чате с ботом.
+- **Совместные подборки** (создание — Premium; вступление и добавление
+  записей — любой тариф) — `collections` Edge Function +
+  `collections`/`collection_items`/`collection_members` таблицы. Ссылка на
+  подборку использует тот же механизм `?startapp=`, что и рефералы, с
+  префиксом `col_<code>`; присоединение обрабатывается в `auth-telegram`
+  при каждом входе (не только при регистрации, в отличие от рефералов).
 
 ## Оплата (Pro / Premium / свой тариф)
 

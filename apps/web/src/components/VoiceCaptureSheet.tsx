@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Mic, Square, Check, KeyRound } from "lucide-react";
+import { Mic, Square, Check, KeyRound, Copy } from "lucide-react";
 import clsx from "clsx";
 import { Sheet } from "./Sheet";
 import { Button } from "./ui";
@@ -166,10 +166,18 @@ export function VoiceCaptureSheet({
             <div
               className={clsx(
                 "flex h-11 w-11 items-center justify-center rounded-full border",
-                flash.tone === "secret" ? "border-signal-dim/60 bg-signal/10 text-signal" : "border-moss/40 bg-moss/10 text-moss",
+                flash.tone === "secret" && "border-signal-dim/60 bg-signal/10 text-signal",
+                flash.tone === "duplicate" && "border-slate-dim/40 bg-graphite-raised text-slate",
+                flash.tone === "success" && "border-moss/40 bg-moss/10 text-moss",
               )}
             >
-              {flash.tone === "secret" ? <KeyRound size={18} strokeWidth={2} /> : <Check size={20} strokeWidth={2} />}
+              {flash.tone === "secret" ? (
+                <KeyRound size={18} strokeWidth={2} />
+              ) : flash.tone === "duplicate" ? (
+                <Copy size={18} strokeWidth={1.5} />
+              ) : (
+                <Check size={20} strokeWidth={2} />
+              )}
             </div>
             <p className="max-w-[260px] text-sm font-medium text-bone">{flash.title}</p>
             <p className="text-xs text-slate">{flash.sub}</p>

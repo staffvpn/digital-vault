@@ -8,7 +8,7 @@ import type { ClassifyResult, ItemType } from "../types";
 export interface AutoSaveFlash {
   title: string;
   sub: string;
-  tone: "success" | "secret";
+  tone: "success" | "secret" | "duplicate";
 }
 
 export function isUrl(text: string): boolean {
@@ -23,8 +23,12 @@ export function isUrl(text: string): boolean {
 export async function classifyAndSaveText(raw: string): Promise<AutoSaveFlash> {
   const trimmed = raw.trim();
   const kind: "url" | "text" = isUrl(trimmed) ? "url" : "text";
-  const { result, linkMeta } = await classifyContent({ kind, content: trimmed });
+  const { result, linkMeta, existingItem } = await classifyContent({ kind, content: trimmed });
   const meta = linkMeta as { title: string | null; description: string | null; image: string | null; domain: string | null } | undefined;
+
+  if (result.type === "duplicate") {
+    return { title: existingItem?.title ?? "Уже сохранено", sub: "Уже есть в коллекции", tone: "duplicate" };
+  }
 
   if (result.type === "possible_credential") {
     const guess = guessCredentialFields(trimmed);

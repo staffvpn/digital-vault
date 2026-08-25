@@ -41,6 +41,18 @@ export interface VaultItem {
   remind_notified_stage1: boolean;
   remind_notified_stage2: boolean;
   reminder_done: boolean;
+  summary: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Collection {
+  id: string;
+  owner_id: string;
+  name: string;
+  share_code: string;
+  itemCount?: number;
+  myRole?: "owner" | "member";
   created_at: string;
   updated_at: string;
 }
@@ -112,7 +124,7 @@ export interface ReferralInfo {
 }
 
 export interface ClassifyResult {
-  type: ItemType | "possible_credential" | "unknown";
+  type: ItemType | "possible_credential" | "unknown" | "duplicate";
   category: string | null;
   subcategory?: string | null;
   title: string | null;
@@ -123,4 +135,5 @@ export interface ClassifyResult {
   remind_has_time?: boolean;
   remind_notify_1?: string | null;
   remind_notify_2?: string | null;
+  ocr_text?: string | null;
 }

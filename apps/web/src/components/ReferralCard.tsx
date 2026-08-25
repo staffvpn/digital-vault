@@ -10,6 +10,11 @@ import { relativeDate } from "../lib/format";
 import type { ReferralUserStatus } from "../types";
 
 const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME as string | undefined;
+// The short name given to the Mini App in @BotFather (via /newapp) — a
+// direct startapp link only resolves as t.me/<bot>/<app_shortname>?startapp=,
+// NOT t.me/<bot>?startapp= alone (that form 400s with BOT_INVALID once the
+// bot has a registered Mini App rather than just a Menu Button URL).
+const APP_SHORTNAME = import.meta.env.VITE_TELEGRAM_MINIAPP_SHORTNAME as string | undefined;
 
 const STATUS_LABEL: Record<ReferralUserStatus, string> = {
   registered: "Ждём оплату",
@@ -40,7 +45,8 @@ export function ReferralCard() {
   if (isLoading) return <Skeleton className="h-24 w-full" />;
   if (!data) return null;
 
-  const link = BOT_USERNAME ? `https://t.me/${BOT_USERNAME}?startapp=${data.code}` : null;
+  const link =
+    BOT_USERNAME && APP_SHORTNAME ? `https://t.me/${BOT_USERNAME}/${APP_SHORTNAME}?startapp=${data.code}` : null;
   const shareText = `NCHT Notion — сохраняю ссылки, файлы и пароли, ИИ сам всё раскладывает. Заходи: ${link ?? data.code}`;
 
   const copy = async () => {

@@ -60,8 +60,14 @@ dev-режиме есть кнопка «Предпросмотр без Telegra
    `dist`. Прописать `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` как
    переменные окружения хостинга, плюс (опционально, для полных
    реферальных ссылок) `VITE_TELEGRAM_BOT_USERNAME` — username бота без
-   `@`. Без неё реферальный блок покажет только код приглашения вместо
-   готовой ссылки `t.me/<bot>?startapp=<код>`.
+   `@` — и `VITE_TELEGRAM_MINIAPP_SHORTNAME` — short name, который бот
+   получил при регистрации Mini App через `/newapp` у @BotFather (виден в
+   финальной direct-link ссылке от BotFather вида `t.me/<bot>/<shortname>`).
+   Без обеих переменных реферальный блок покажет только код приглашения
+   вместо готовой ссылки. **Обе обязательны вместе**: ссылка вида
+   `t.me/<bot>?startapp=<код>` без short name отдаёт `BOT_INVALID`, как
+   только у бота зарегистрировано настоящее Mini App (а не просто Menu
+   Button) — правильный формат: `t.me/<bot>/<shortname>?startapp=<код>`.
 
 ## Оплата (Pro / Premium / свой тариф)
 

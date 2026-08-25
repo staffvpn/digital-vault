@@ -8,9 +8,9 @@ Personal Digital Vault — Telegram Mini App для хранения и AI-ор�
 
 - `apps/web` — React + TypeScript + Vite + Tailwind фронтенд (Mini App UI).
 - `supabase/migrations` — схема Postgres (RLS deny-all, только через Edge Functions).
-- `supabase/functions` — 9 Edge Functions: `auth-telegram`, `items-crud`,
+- `supabase/functions` — 11 Edge Functions: `auth-telegram`, `items-crud`,
   `secrets-crud`, `classify-item`, `link-metadata`, `files-upload`, `files-url`,
-  `referrals`, `payment-webhook`.
+  `referrals`, `payment-webhook`, `transcribe-audio`, `deliver-reminders`.
 
 Backend уже развёрнут в Supabase-проекте `digital-vault`
 (`etvnsrvenbsqxhosmuhw`, регион eu-west-1, Free-тариф).
@@ -47,9 +47,18 @@ dev-режиме есть кнопка «Предпросмотр без Telegra
      Модель классификации: `anthropic/claude-sonnet-5`, endpoint
      `https://polza.ai/api/v1/chat/completions`.
 
+   - `CRON_SECRET` — must be exactly `b8b1a13ced45df526ef6606905115d6cb7858e83e6d6ed76`
+     (this exact value is already hard-coded into the pg_cron job created by
+     `migrations/0005_reminder_columns_and_cron.sql` — there's no MCP tool to
+     set Edge Function secrets, so the two sides have to match manually).
+     Protects `deliver-reminders`, the job pg_cron calls every 5 minutes to
+     send reminder notifications via Telegram — without this secret set,
+     reminders will never actually be delivered even though everything else
+     about them works.
+
    Или через CLI после `supabase link`:
    ```bash
-   supabase secrets set TELEGRAM_BOT_TOKEN=... SESSION_SECRET=... VAULT_ENCRYPTION_KEY=... ANTHROPIC_API_KEY=...
+   supabase secrets set TELEGRAM_BOT_TOKEN=... SESSION_SECRET=... VAULT_ENCRYPTION_KEY=... POLZA_API_KEY=... CRON_SECRET=...
    ```
 
 2. **@BotFather** → ваш бот → Bot Settings → Menu Button → указать URL
@@ -68,6 +77,23 @@ dev-режиме есть кнопка «Предпросмотр без Telegra
    `t.me/<bot>?startapp=<код>` без short name отдаёт `BOT_INVALID`, как
    только у бота зарегистрировано настоящее Mini App (а не просто Menu
    Button) — правильный формат: `t.me/<bot>/<shortname>?startapp=<код>`.
+
+## Голос и напоминания
+
+Центральная кнопка-микрофон в нижней навигации открывает запись голоса или
+текстовый ввод, который проходит через тот же ИИ-конвейер, что и обычная
+вставка. `transcribe-audio` пересылает запись на Whisper через Polza.ai
+(`openai/whisper-large-v3-turbo`, endpoint `/api/v1/audio/transcriptions`),
+результат метится как обычный AI-вызов (тот же месячный лимит тарифа).
+
+Если ИИ распознаёт в тексте дедлайн/напоминание ("напомни...", явная дата),
+`classify-item` выставляет `type: "reminder"` и считает два момента
+уведомления: `remind_notify_1`/`remind_notify_2` (за 2 дня и в сам день в
+12:00 МСК — если время не указано; либо за 1 час и в момент — если указано
+точное время). `deliver-reminders` вызывается pg_cron каждые 5 минут
+(`migrations/0005`) и шлёт уведомление в Telegram через Bot API, когда
+время подходит. Список и отметка «выполнено» — экран «Напоминания» в
+Библиотеке.
 
 ## Оплата (Pro / Premium / свой тариф)
 

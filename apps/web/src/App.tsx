@@ -17,6 +17,7 @@ import { ImagesScreen } from "./screens/Images";
 import { ServicesScreen } from "./screens/Services";
 import { FilesScreen } from "./screens/Files";
 import { NotesScreen } from "./screens/Notes";
+import { RemindersScreen } from "./screens/Reminders";
 import { SearchScreen } from "./screens/Search";
 import { SettingsScreen } from "./screens/Settings";
 import { InfoScreen } from "./screens/Info";
@@ -89,6 +90,7 @@ function AppRoutes() {
       <Route path="/library/images" element={<ImagesScreen />} />
       <Route path="/library/files" element={<FilesScreen />} />
       <Route path="/library/notes" element={<NotesScreen />} />
+      <Route path="/library/reminders" element={<RemindersScreen />} />
       <Route path="/search" element={<SearchScreen />} />
       <Route path="/settings" element={<SettingsScreen />} />
       <Route path="/settings/info" element={<InfoScreen />} />

@@ -4,6 +4,7 @@ export type ItemType =
   | "image"
   | "file"
   | "note"
+  | "reminder"
   | "movie"
   | "series"
   | "service"
@@ -32,6 +33,14 @@ export interface VaultItem {
   status: ItemStatus;
   movie_status: MovieStatus | null;
   confidence: number | null;
+  // Reminder scheduling — only set when type === "reminder".
+  remind_at: string | null;
+  remind_has_time: boolean;
+  remind_notify_1: string | null;
+  remind_notify_2: string | null;
+  remind_notified_stage1: boolean;
+  remind_notified_stage2: boolean;
+  reminder_done: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -110,4 +119,8 @@ export interface ClassifyResult {
   description?: string | null;
   tags: string[];
   confidence: number;
+  remind_at?: string | null;
+  remind_has_time?: boolean;
+  remind_notify_1?: string | null;
+  remind_notify_2?: string | null;
 }

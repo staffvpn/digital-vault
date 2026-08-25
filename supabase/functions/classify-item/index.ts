@@ -4,8 +4,9 @@ import { supabaseAdmin } from "./_shared/supabaseAdmin.ts";
 import { looksLikeCredential } from "./_shared/heuristics.ts";
 import { fetchLinkMeta } from "./_shared/linkMeta.ts";
 
-const TAXONOMY = `
-Возможные type: link, text, image, file, note, service, bookmark, design_reference.
+function buildTaxonomy(nowMsk: string): string {
+  return `
+Возможные type: link, text, image, file, note, reminder, service, bookmark, design_reference.
 (Типы movie/series/tags не используются — не добавляй их.)
 
 Правила:
@@ -20,7 +21,24 @@ const TAXONOMY = `
   Marketing, Finance, Other.
 - Обычная ссылка на сайт без явной категории выше — type "bookmark",
   category — коротко по смыслу сайта.
-- Заметка (текст без ссылки) — type "note", category — короткий Project.
+- Текст о том, что нужно сделать или не забыть к конкретной дате/времени
+  (дедлайн, "напомни", "нужно сделать к...", явная дата) — type "reminder".
+  В этом случае ОБЯЗАТЕЛЬНО заполни "remind_at" (ISO 8601 datetime, до
+  минуты, часовой пояс Москвы UTC+3, например "2026-09-23T12:00:00+03:00")
+  и "remind_has_time" (true, если в тексте прямо названо время, иначе
+  false — и тогда поставь remind_at на 12:00 по Москве в нужную дату).
+  Если год не указан — подразумевай ближайшую будущую дату. Текущие дата и
+  время в Москве прямо сейчас: ${nowMsk}.
+- Обычная заметка без даты/дедлайна (текст без ссылки) — type "note",
+  category — короткий Project.
+
+"title" — короткое название по сути дела, а не первые слова текста.
+Если текст длинный или это список шагов (например, рецепт, инструкция) —
+пойми главную тему и озаглавь её по смыслу (длинный текст про то, как
+почистить и обжарить картошку с грибами -> "Рецепт жареной картошки с
+грибами"). Если суть по-настоящему не укладывается коротко — заголовок
+может быть длиннее, точность важнее краткости, никогда не обрывай его
+многоточием сам.
 
 Также ВСЕГДА заполняй "description" — одно короткое предложение на русском
 (до 140 символов) простыми словами о том, что это такое: конкретные имена,
@@ -29,8 +47,32 @@ const TAXONOMY = `
 пиши так, чтобы поиск по любому упомянутому слову находил её.
 
 Отвечай СТРОГО в формате JSON без пояснений и без markdown:
-{"type":"...","category":"...","subcategory":"...","title":"...","description":"...","confidence":0.0}
+{"type":"...","category":"...","subcategory":"...","title":"...","description":"...","confidence":0.0,"remind_at":null,"remind_has_time":false}
 `.trim();
+}
+
+function nowInMoscow(): string {
+  return new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Europe/Moscow",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    weekday: "long",
+  }).format(new Date());
+}
+
+// Two notification instants, computed once and stored — the delivery cron
+// (deliver-reminders) just compares timestamps, it never does date math.
+function computeReminderNotifications(remindAtIso: string, hasTime: boolean): { notify1: string; notify2: string } | null {
+  const target = new Date(remindAtIso);
+  if (Number.isNaN(target.getTime())) return null;
+  const notify2 = target.toISOString();
+  const offsetMs = hasTime ? 60 * 60 * 1000 : 2 * 24 * 60 * 60 * 1000; // 1h before, or 2 days before
+  const notify1 = new Date(target.getTime() - offsetMs).toISOString();
+  return { notify1, notify2 };
+}
 
 // Classification runs through Polza.ai — an OpenAI-compatible proxy that
 // routes to Claude (and other providers) without needing a direct Anthropic
@@ -39,15 +81,16 @@ async function callModel(input: { text?: string; imageBase64?: string; mimeType?
   const apiKey = Deno.env.get("POLZA_API_KEY");
   if (!apiKey) return null;
 
+  const taxonomy = buildTaxonomy(nowInMoscow());
   const content: any[] = [];
   if (input.imageBase64 && input.mimeType) {
-    content.push({ type: "text", text: "Опиши и классифицируй это изображение.\n\n" + TAXONOMY });
+    content.push({ type: "text", text: "Опиши и классифицируй это изображение.\n\n" + taxonomy });
     content.push({
       type: "image_url",
       image_url: { url: `data:${input.mimeType};base64,${input.imageBase64}` },
     });
   } else {
-    content.push({ type: "text", text: `Классифицируй этот контент:\n\n${input.text}\n\n${TAXONOMY}` });
+    content.push({ type: "text", text: `Классифицируй этот контент:\n\n${input.text}\n\n${taxonomy}` });
   }
 
   const res = await fetch("https://polza.ai/api/v1/chat/completions", {
@@ -174,6 +217,22 @@ Deno.serve(async (req) => {
       source: "fallback",
       linkMeta,
     });
+  }
+
+  // 4. Reminder timestamps: the AI extracts *what* and *when* in words —
+  // the actual notify_1/notify_2 instants are always computed here, never
+  // trusted from the model's own arithmetic.
+  if (aiResult.type === "reminder" && typeof aiResult.remind_at === "string") {
+    const notifications = computeReminderNotifications(aiResult.remind_at, Boolean(aiResult.remind_has_time));
+    if (notifications) {
+      aiResult.remind_notify_1 = notifications.notify1;
+      aiResult.remind_notify_2 = notifications.notify2;
+    } else {
+      // Unparseable date from the model — don't silently create a reminder
+      // that can never fire.
+      aiResult.type = "note";
+      aiResult.remind_at = null;
+    }
   }
 
   return json({ result: aiResult, source: "ai", linkMeta });

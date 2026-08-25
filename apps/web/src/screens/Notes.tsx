@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { StickyNote, ArrowUp, ChevronDown, Trash2 } from "lucide-react";
+import { StickyNote, ArrowUp, ChevronDown, Trash2, Pencil, Copy, Check, X } from "lucide-react";
 import clsx from "clsx";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
 import { Card, EmptyState, ErrorState, Skeleton, Tag } from "../components/ui";
-import { classifyContent, createItem, createSecret, deleteItem, listItems } from "../lib/api";
+import { classifyContent, createItem, createSecret, deleteItem, listItems, updateItem } from "../lib/api";
 import { relativeDate } from "../lib/format";
 import { guessCredentialFields, guessSecretName } from "../lib/credentialGuess";
-import { hapticNotify } from "../lib/telegram";
+import { hapticNotify, haptic } from "../lib/telegram";
 import { useToastStore } from "../state/toast";
 import type { VaultItem } from "../types";
 
@@ -51,7 +51,7 @@ export function NotesScreen() {
         {!isLoading && !isError && data && data.length > 0 && (
           <Card className="divide-y divide-hairline p-0">
             {data.map((item) => (
-              <NoteRow key={item.id} item={item} onDeleted={invalidate} />
+              <NoteRow key={item.id} item={item} onChanged={invalidate} />
             ))}
           </Card>
         )}
@@ -155,11 +155,19 @@ function NoteComposer({ onSaved }: { onSaved: () => void }) {
 }
 
 // Tap to unfold in place and read the whole thing, paragraphs intact — no
-// bottom sheet, no category picker, nothing that isn't reading or deleting.
-function NoteRow({ item, onDeleted }: { item: VaultItem; onDeleted: () => void }) {
+// bottom sheet, no category picker. From here you can also edit the text
+// in place or copy it — nothing that isn't reading, editing, or deleting.
+function NoteRow({ item, onChanged }: { item: VaultItem; onChanged: () => void }) {
   const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [copied, setCopied] = useState(false);
   const push = useToastStore((s) => s.push);
+
+  const fullText = item.body || item.description || "";
+  const preview = item.description || item.body || "";
 
   const remove = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -168,21 +176,58 @@ function NoteRow({ item, onDeleted }: { item: VaultItem; onDeleted: () => void }
     try {
       await deleteItem(item.id);
       push("Удалено", "success");
-      onDeleted();
+      onChanged();
     } catch {
       push("Не удалось удалить", "error");
       setDeleting(false);
     }
   };
 
-  const preview = item.description || item.body || "";
-  const fullText = item.body || item.description || "";
+  const startEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDraft(fullText);
+    setEditing(true);
+  };
+
+  const cancelEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditing(false);
+  };
+
+  const saveEdit = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const text = draft.trim();
+    if (!text || saving) return;
+    setSaving(true);
+    try {
+      await updateItem(item.id, { body: text } as Partial<VaultItem>);
+      push("Изменения сохранены", "success");
+      setEditing(false);
+      onChanged();
+    } catch {
+      push("Не удалось сохранить", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const copy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(fullText);
+      setCopied(true);
+      haptic("light");
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      push("Не удалось скопировать", "error");
+    }
+  };
 
   return (
     <div className="px-4 py-3">
       <button onClick={() => setExpanded((v) => !v)} className="flex w-full items-start gap-2 text-left">
         <div className="min-w-0 flex-1 space-y-1">
-          <p className="truncate text-sm font-medium text-bone">{item.title || "Заметка"}</p>
+          <p className="text-sm font-medium leading-snug text-bone">{item.title || "Заметка"}</p>
           {!expanded && preview && <p className="line-clamp-2 text-xs text-slate">{preview}</p>}
           <p className="font-mono text-[11px] text-slate-dim">{relativeDate(item.created_at)}</p>
         </div>
@@ -195,17 +240,67 @@ function NoteRow({ item, onDeleted }: { item: VaultItem; onDeleted: () => void }
 
       {expanded && (
         <div className="mt-2.5 space-y-2.5 border-t border-hairline pt-2.5">
-          {fullText && <p className="whitespace-pre-wrap text-sm leading-relaxed text-bone">{fullText}</p>}
+          {editing ? (
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={4}
+              autoFocus
+              onClick={(e) => e.stopPropagation()}
+              className="w-full resize-none rounded-md border border-signal-dim/60 bg-graphite-raised px-3 py-2 text-sm leading-relaxed text-bone outline-none"
+            />
+          ) : (
+            fullText && <p className="whitespace-pre-wrap text-sm leading-relaxed text-bone">{fullText}</p>
+          )}
+
           <div className="flex items-center justify-between">
             {item.category ? <Tag>{item.category}</Tag> : <span />}
-            <button
-              onClick={remove}
-              disabled={deleting}
-              className="inline-flex items-center gap-1.5 text-xs text-slate-dim transition-colors hover:text-ember disabled:opacity-50"
-            >
-              <Trash2 size={12} strokeWidth={1.5} />
-              {deleting ? "Удаляем…" : "Удалить"}
-            </button>
+            <div className="flex items-center gap-3">
+              {editing ? (
+                <>
+                  <button
+                    onClick={cancelEdit}
+                    className="inline-flex items-center gap-1.5 text-xs text-slate-dim transition-colors hover:text-bone"
+                  >
+                    <X size={12} strokeWidth={1.5} />
+                    Отмена
+                  </button>
+                  <button
+                    onClick={saveEdit}
+                    disabled={saving || !draft.trim()}
+                    className="inline-flex items-center gap-1.5 text-xs text-signal transition-colors hover:brightness-110 disabled:opacity-50"
+                  >
+                    <Check size={12} strokeWidth={2} />
+                    {saving ? "Сохраняем…" : "Сохранить"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={copy}
+                    className="inline-flex items-center gap-1.5 text-xs text-slate-dim transition-colors hover:text-bone"
+                  >
+                    {copied ? <Check size={12} strokeWidth={2} className="text-moss" /> : <Copy size={12} strokeWidth={1.5} />}
+                    {copied ? "Скопировано" : "Копировать"}
+                  </button>
+                  <button
+                    onClick={startEdit}
+                    className="inline-flex items-center gap-1.5 text-xs text-slate-dim transition-colors hover:text-bone"
+                  >
+                    <Pencil size={12} strokeWidth={1.5} />
+                    Изменить
+                  </button>
+                  <button
+                    onClick={remove}
+                    disabled={deleting}
+                    className="inline-flex items-center gap-1.5 text-xs text-slate-dim transition-colors hover:text-ember disabled:opacity-50"
+                  >
+                    <Trash2 size={12} strokeWidth={1.5} />
+                    {deleting ? "Удаляем…" : "Удалить"}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

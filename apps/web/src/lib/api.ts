@@ -123,6 +123,23 @@ export async function uploadFile(file: File): Promise<VaultItem> {
   return data.item as VaultItem;
 }
 
+export async function transcribeAudio(blob: Blob, filename = "voice.webm"): Promise<string> {
+  const token = useAuthStore.getState().sessionToken;
+  const form = new FormData();
+  form.append("audio", blob, filename);
+  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`, {
+    method: "POST",
+    headers: {
+      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: form,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(data.error ?? `transcribe_failed_${res.status}`, res.status, data.error);
+  return data.text as string;
+}
+
 export async function getFileUrl(itemId: string) {
   const { url } = await call<{ url: string }>("files-url", { query: { item_id: itemId } });
   return url;

@@ -132,11 +132,19 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
             preview_url: linkMeta?.image ?? null,
             status: "saved",
             confidence: result.confidence,
-          });
+            remind_at: result.remind_at ?? null,
+            remind_has_time: result.remind_has_time ?? false,
+            remind_notify_1: result.remind_notify_1 ?? null,
+            remind_notify_2: result.remind_notify_2 ?? null,
+          } as Partial<import("../types").VaultItem>);
         }
+        const sub =
+          result.type === "reminder" && result.remind_at
+            ? `Напоминание · ${new Date(result.remind_at).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}`
+            : result.category ?? "Разобрано и сохранено";
         flashSaved({
           title: title || "Сохранено",
-          sub: result.category ?? "Разобрано и сохранено",
+          sub,
           tone: "success",
         });
       } catch {

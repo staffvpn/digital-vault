@@ -83,6 +83,7 @@ export interface Profile {
 export interface PlanInfo {
   id: Plan;
   price_rub: number;
+  price_stars: number;
   storage_limit_bytes: number;
   ai_calls_limit_per_month: number;
   secrets_limit: number;

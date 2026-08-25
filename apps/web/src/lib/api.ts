@@ -190,3 +190,10 @@ export async function listPlans() {
 export async function getReferralInfo() {
   return call<import("../types").ReferralInfo>("referrals");
 }
+
+export async function createStarsInvoice(plan: "pro" | "pro_plus") {
+  return call<{ invoiceLink: string; paymentId: string; stars: number }>("create-stars-invoice", {
+    method: "POST",
+    body: { plan },
+  });
+}

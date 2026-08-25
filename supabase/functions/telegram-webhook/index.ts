@@ -3,7 +3,7 @@ import { supabaseAdmin } from "./_shared/supabaseAdmin.ts";
 import { looksLikeCredential } from "./_shared/heuristics.ts";
 import { fetchLinkMeta } from "./_shared/linkMeta.ts";
 import { callClassifyModel, attachReminderTimestamps } from "./_shared/classify.ts";
-import { sendTelegramMessage } from "./_shared/telegramSend.ts";
+import { sendTelegramMessage, answerPreCheckoutQuery } from "./_shared/telegramSend.ts";
 
 // Forward (or just type) anything straight to the bot in its private chat —
 // no need to open the Mini App at all. This is the direct answer to
@@ -27,6 +27,40 @@ Deno.serve(async (req) => {
   if (!botToken) return json({ error: "server_not_configured" }, 500);
 
   const update = await req.json().catch(() => null);
+  const supabase = supabaseAdmin();
+
+  // Stars-payment handshake, step 1: Telegram asks "still good to charge?"
+  // right before moving the user's Stars. Must answer within 10s. This is
+  // the last checkpoint before real money (well, Stars) changes hands, so
+  // it re-checks the pending payment row rather than trusting the invoice
+  // payload blindly — this update type carries no `message`, so it has to
+  // be handled before the message-only early return below.
+  if (update?.pre_checkout_query) {
+    const pcq = update.pre_checkout_query;
+    let ok = false;
+    const { data: payment } = await supabase
+      .from("payments")
+      .select("id, status, user_id")
+      .eq("id", pcq.invoice_payload)
+      .maybeSingle();
+    if (payment && payment.status === "pending") {
+      const { data: payer } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", payment.user_id)
+        .eq("telegram_id", pcq.from?.id)
+        .maybeSingle();
+      ok = Boolean(payer);
+    }
+    await answerPreCheckoutQuery(
+      botToken,
+      pcq.id,
+      ok,
+      ok ? undefined : "Счёт устарел или недействителен — откройте приложение и попробуйте снова.",
+    );
+    return json({ ok: true });
+  }
+
   const message = update?.message;
   if (!message) return json({ ok: true }); // non-message update (edits, etc.) — nothing to do
 
@@ -36,7 +70,6 @@ Deno.serve(async (req) => {
 
   const reply = (text: string) => sendTelegramMessage(botToken, chatId, text);
 
-  const supabase = supabaseAdmin();
   const { data: profile } = await supabase
     .from("profiles")
     .select("id, plan, ai_calls_used, ai_calls_period_start, storage_used_bytes")
@@ -45,6 +78,32 @@ Deno.serve(async (req) => {
 
   if (!profile) {
     await reply("Сначала откройте приложение через кнопку меню хотя бы один раз — тогда я буду знать, кто вы 🙂");
+    return json({ ok: true });
+  }
+
+  // Stars-payment handshake, step 2: the charge actually went through.
+  // Grant the plan here — same qualify/consume calls the (still-stubbed)
+  // Platega webhook uses for a "succeeded" event, so referral rewards work
+  // identically no matter which provider the money came through.
+  if (message.successful_payment) {
+    const sp = message.successful_payment;
+    const { data: payment } = await supabase
+      .from("payments")
+      .select("id, status, plan, user_id")
+      .eq("id", sp.invoice_payload)
+      .maybeSingle();
+    if (payment && payment.user_id === profile.id && payment.status !== "succeeded") {
+      await supabase
+        .from("payments")
+        .update({ status: "succeeded", provider_ref: sp.telegram_payment_charge_id })
+        .eq("id", payment.id);
+      await supabase.from("profiles").update({ plan: payment.plan }).eq("id", profile.id);
+      await supabase.rpc("fn_qualify_referral", { p_referred_id: profile.id, p_plan: payment.plan });
+      await supabase.rpc("fn_consume_referral_discount", { p_user_id: profile.id });
+      await reply(`✅ Оплата получена — тариф обновлён на ${payment.plan === "pro" ? "Pro" : "Premium"}. Спасибо! ⭐`);
+    } else {
+      await reply("✅ Оплата получена, спасибо!");
+    }
     return json({ ok: true });
   }
 

@@ -8,10 +8,11 @@ Personal Digital Vault — Telegram Mini App для хранения и AI-ор�
 
 - `apps/web` — React + TypeScript + Vite + Tailwind фронтенд (Mini App UI).
 - `supabase/migrations` — схема Postgres (RLS deny-all, только через Edge Functions).
-- `supabase/functions` — 15 Edge Functions: `auth-telegram`, `items-crud`,
+- `supabase/functions` — 16 Edge Functions: `auth-telegram`, `items-crud`,
   `secrets-crud`, `classify-item`, `link-metadata`, `files-upload`, `files-url`,
-  `referrals`, `payment-webhook`, `transcribe-audio`, `deliver-reminders`,
-  `telegram-webhook`, `setup-webhook`, `summarize-link`, `collections`.
+  `referrals`, `payment-webhook`, `create-stars-invoice`, `transcribe-audio`,
+  `deliver-reminders`, `telegram-webhook`, `setup-webhook`, `summarize-link`,
+  `collections`.
 
 Backend уже развёрнут в Supabase-проекте `digital-vault`
 (`etvnsrvenbsqxhosmuhw`, регион eu-west-1, Free-тариф).
@@ -134,21 +135,33 @@ dev-режиме есть кнопка «Предпросмотр без Telegra
 
 ## Оплата (Pro / Premium / свой тариф)
 
-Сейчас — только схема тарифов, калькулятор своего тарифа и paywall UI
-(цены в ₽); нажатие «Оформить» показывает тост «Оплата подключается».
-Готова серверная часть, к которой предстоит подключить реального
-провайдера:
+Оплата на кнопке «Улучшить» открывает выбор способа: **Telegram Stars**
+(работает по-настоящему) или **карта/СБП через Platega.io** (пока
+заглушка — тост «скоро»).
 
-- `payments` / `referrals` таблицы и SQL-функции `fn_qualify_referral` /
+- **Telegram Stars** — Telegram сам выступает платёжным провайдером
+  (валюта `XTR`), внешний мерчант-аккаунт не нужен, только уже
+  существующий `TELEGRAM_BOT_TOKEN`. Цена в звёздах хранится в
+  `plans.price_stars` (курс ~1 XTR ≈ 1.5 ₽, `supabase/migrations/
+  0008_telegram_stars_payments.sql`). Поток: `create-stars-invoice`
+  (session-функция) создаёт `payments`-запись со статусом `pending` и
+  вызывает `createInvoiceLink`; фронтенд открывает ссылку через
+  `Telegram.WebApp.openInvoice`; Telegram шлёт `telegram-webhook`
+  сначала `pre_checkout_query` (обязателен ответ за 10 секунд — функция
+  сверяет `payments`-запись и telegram_id плательщика), а после реальной
+  оплаты — `message.successful_payment`, где тариф и выдаётся (плюс те
+  же вызовы `fn_qualify_referral`/`fn_consume_referral_discount`, что и
+  у Platega-заглушки). Отдельных секретов настраивать не нужно.
+- **Карта/СБП (Platega.io)** — пока заглушка, серверная часть готова:
+  `payments` / `referrals` таблицы и SQL-функции `fn_qualify_referral` /
   `fn_reverse_referral` (`supabase/migrations/0002_referrals_and_custom_plan.sql`)
   реализуют реферальные бонусы строго за подтверждённую оплату Pro/Premium
   (не за регистрацию), с защитой от self-referral, повторных начислений,
   автовозврата бонуса при рефанде и лимитом бонуса на аккаунт — параметры
   вынесены в таблицу `app_config`, меняются без передеплоя.
-- `payment-webhook` Edge Function — точка, куда должен стучаться реальный
-  провайдер (Platega.io и т.п.) после оплаты/рефанда. По умолчанию
-  отклоняет всё: нужно один раз задать секрет `PAYMENT_WEBHOOK_SECRET`
-  (Supabase Dashboard → Edge Functions → Secrets) и настроить у провайдера
-  отправку этого значения в заголовке `X-Webhook-Secret`, плюс — перед
-  реальным запуском — заменить сверку по секрету проверкой подписи
-  провайдера согласно его документации.
+  `payment-webhook` Edge Function — точка, куда должен стучаться реальный
+  провайдер после оплаты/рефанда. По умолчанию отклоняет всё: нужно один
+  раз задать секрет `PAYMENT_WEBHOOK_SECRET` (Supabase Dashboard → Edge
+  Functions → Secrets) и настроить у провайдера отправку этого значения в
+  заголовке `X-Webhook-Secret`, плюс — перед реальным запуском — заменить
+  сверку по секрету проверкой подписи провайдера согласно его документации.

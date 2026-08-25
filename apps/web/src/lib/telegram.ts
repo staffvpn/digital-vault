@@ -20,6 +20,7 @@ interface TelegramWebApp {
     notificationOccurred: (type: "error" | "success" | "warning") => void;
   };
   openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
+  openInvoice?: (url: string, callback: (status: "paid" | "cancelled" | "failed" | "pending") => void) => void;
   BackButton?: {
     show: () => void;
     hide: () => void;
@@ -65,6 +66,22 @@ export function getInitData(): string | null {
 }
 
 export const isInsideTelegram = (): boolean => Boolean(getTelegramWebApp()?.initData);
+
+// Opens a Telegram Stars invoice link inside the Mini App's native payment
+// sheet and resolves once the user closes it. Falls back to a plain link
+// (e.g. desktop clients without openInvoice) with status "pending" — the
+// webhook still grants the plan once/if the payment actually completes.
+export function openInvoice(url: string): Promise<"paid" | "cancelled" | "failed" | "pending"> {
+  return new Promise((resolve) => {
+    const tg = getTelegramWebApp();
+    if (!tg?.openInvoice) {
+      openExternalLink(url);
+      resolve("pending");
+      return;
+    }
+    tg.openInvoice(url, (status) => resolve(status));
+  });
+}
 
 export function openExternalLink(url: string): void {
   const tg = getTelegramWebApp();

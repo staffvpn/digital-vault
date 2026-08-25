@@ -7,6 +7,7 @@ import { ItemRow } from "../components/ItemRow";
 import { ItemActionsSheet } from "../components/ItemActionsSheet";
 import { PlanList, PLAN_TITLES, rub } from "../components/PlanList";
 import { CustomPlanCard } from "../components/CustomPlanCard";
+import { PaymentMethodSheet } from "../components/PaymentMethodSheet";
 import { Badge, Card, ErrorState, SectionLabel, Skeleton } from "../components/ui";
 import { listItems, listPlans, updateItem } from "../lib/api";
 import { useAuthStore } from "../state/auth";
@@ -19,6 +20,7 @@ export function InboxScreen() {
   const push = useToastStore((s) => s.push);
   const profile = useAuthStore((s) => s.profile);
   const [selected, setSelected] = useState<VaultItem | null>(null);
+  const [paymentPlan, setPaymentPlan] = useState<PlanInfo | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["items", "inbox"],
@@ -45,7 +47,13 @@ export function InboxScreen() {
   const currentPlan = plans?.find((p) => p.id === profile?.plan);
   const otherPlans = plans?.filter((p) => p.id !== profile?.plan);
 
-  const onUpgrade = (_plan: PlanInfo) => push("Оплата подключается — скоро через Platega.io", "default");
+  const onUpgrade = (plan: PlanInfo) => {
+    if (plan.id === "free") {
+      push("Понижение тарифа — пока через поддержку, скоро появится в приложении", "default");
+      return;
+    }
+    setPaymentPlan(plan);
+  };
   const onCustomCheckout = (_price: number, _sel: CustomPlanSelection) =>
     push("Оплата подключается — скоро через Platega.io", "default");
 
@@ -134,6 +142,7 @@ export function InboxScreen() {
         onClose={() => setSelected(null)}
         onChanged={invalidate}
       />
+      <PaymentMethodSheet plan={paymentPlan} open={Boolean(paymentPlan)} onClose={() => setPaymentPlan(null)} />
       <BottomNav />
     </div>
   );

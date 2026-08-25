@@ -6,6 +6,7 @@ import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
 import { Card } from "../components/ui";
 import { PLAN_TITLES } from "../components/PlanList";
+import { ReferralCard } from "../components/ReferralCard";
 import { listPlans } from "../lib/api";
 import { useAuthStore } from "../state/auth";
 import { formatBytes } from "../lib/typeMeta";
@@ -46,6 +47,8 @@ export function SettingsScreen() {
             />
           </Card>
         )}
+
+        {(profile?.plan === "pro" || profile?.plan === "pro_plus") && <ReferralCard />}
 
         <div className="flex justify-center pt-2">
           <button

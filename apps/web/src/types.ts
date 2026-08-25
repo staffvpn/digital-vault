@@ -75,12 +75,29 @@ export interface ReferralStats {
   refunded: number;
 }
 
+export type ReferralUserStatus =
+  | "registered"
+  | "payment_pending"
+  | "paid"
+  | "qualified"
+  | "rewarded"
+  | "refunded"
+  | "blocked";
+
+export interface ReferredUser {
+  name: string;
+  status: ReferralUserStatus;
+  createdAt: string;
+  rewardAmount: number;
+}
+
 export interface ReferralInfo {
   code: string;
   bonusSecrets: number;
   rewardPerReferral: number;
   maxBonusSecrets: number;
   stats: ReferralStats;
+  referredUsers: ReferredUser[];
 }
 
 export interface ClassifyResult {

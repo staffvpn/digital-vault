@@ -30,13 +30,36 @@ Deno.serve(async (req) => {
 
   const { data: referrals } = await supabase
     .from("referrals")
-    .select("status")
-    .eq("referrer_id", session.userId);
+    .select("referred_id, status, created_at, reward_amount")
+    .eq("referrer_id", session.userId)
+    .order("created_at", { ascending: false });
 
   const stats = { registered: 0, paid: 0, qualified: 0, rewarded: 0, blocked: 0, refunded: 0 };
   for (const r of referrals ?? []) {
     if (r.status in stats) (stats as Record<string, number>)[r.status] += 1;
   }
+
+  // Who's actually behind each referral row — first name/username only,
+  // never anything more, and only visible to the referrer who invited them.
+  const referredIds = [...new Set((referrals ?? []).map((r) => r.referred_id))];
+  let namesById: Record<string, { first_name: string | null; username: string | null }> = {};
+  if (referredIds.length > 0) {
+    const { data: referredProfiles } = await supabase
+      .from("profiles")
+      .select("id, first_name, username")
+      .in("id", referredIds);
+    namesById = Object.fromEntries((referredProfiles ?? []).map((p) => [p.id, p]));
+  }
+
+  const referredUsers = (referrals ?? []).map((r) => {
+    const who = namesById[r.referred_id];
+    return {
+      name: who?.first_name || who?.username || "Пользователь",
+      status: r.status,
+      createdAt: r.created_at,
+      rewardAmount: r.reward_amount,
+    };
+  });
 
   return json({
     code: profile.referral_code,
@@ -44,5 +67,6 @@ Deno.serve(async (req) => {
     rewardPerReferral: configMap.referral_reward_secrets ?? 2,
     maxBonusSecrets: configMap.referral_max_bonus_secrets ?? 20,
     stats,
+    referredUsers,
   });
 });

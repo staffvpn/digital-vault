@@ -1,12 +1,35 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Gift, Share2, Copy, Check } from "lucide-react";
+import clsx from "clsx";
 import { Card, Skeleton } from "./ui";
 import { getReferralInfo } from "../lib/api";
 import { useToastStore } from "../state/toast";
 import { haptic } from "../lib/telegram";
+import { relativeDate } from "../lib/format";
+import type { ReferralUserStatus } from "../types";
 
 const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME as string | undefined;
+
+const STATUS_LABEL: Record<ReferralUserStatus, string> = {
+  registered: "Ждём оплату",
+  payment_pending: "Оформляет оплату",
+  paid: "Оплатил, проверяем",
+  qualified: "Условие выполнено",
+  rewarded: "Условие выполнено",
+  refunded: "Оплата возвращена",
+  blocked: "На проверке",
+};
+
+const STATUS_TONE: Record<ReferralUserStatus, string> = {
+  registered: "text-slate-dim",
+  payment_pending: "text-slate-dim",
+  paid: "text-slate-dim",
+  qualified: "text-moss",
+  rewarded: "text-moss",
+  refunded: "text-ember",
+  blocked: "text-ember",
+};
 
 export function ReferralCard() {
   const push = useToastStore((s) => s.push);
@@ -44,7 +67,6 @@ export function ReferralCard() {
     copy();
   };
 
-  const paidTotal = data.stats.qualified + data.stats.rewarded + data.stats.refunded;
   const atCap = data.bonusSecrets >= data.maxBonusSecrets;
 
   return (
@@ -76,11 +98,30 @@ export function ReferralCard() {
         Поделиться ссылкой
       </button>
 
-      {(paidTotal > 0 || data.bonusSecrets > 0) && (
-        <p className="text-[11px] text-slate-dim">
-          Оплатили по вашей ссылке: {paidTotal} · бонус: +{data.bonusSecrets} мест в Сейфе
-          {atCap ? " (достигнут максимум)" : ""}
-        </p>
+      <p className="text-[11px] text-slate-dim">
+        Бонус: +{data.bonusSecrets} из {data.maxBonusSecrets} мест в Сейфе
+        {atCap ? " (достигнут максимум)" : ""}
+      </p>
+
+      {data.referredUsers.length > 0 && (
+        <div className="space-y-1 border-t border-hairline pt-3">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-slate-dim">
+            Перешли по ссылке ({data.referredUsers.length})
+          </p>
+          <div className="divide-y divide-hairline">
+            {data.referredUsers.map((u, i) => (
+              <div key={i} className="flex items-center justify-between gap-2 py-2">
+                <div className="min-w-0">
+                  <p className="truncate text-xs text-bone">{u.name}</p>
+                  <p className="text-[10px] text-slate-dim">{relativeDate(u.createdAt)}</p>
+                </div>
+                <span className={clsx("shrink-0 text-[11px] font-medium", STATUS_TONE[u.status])}>
+                  {STATUS_LABEL[u.status]}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </Card>
   );

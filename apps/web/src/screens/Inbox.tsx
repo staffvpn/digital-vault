@@ -7,7 +7,6 @@ import { ItemRow } from "../components/ItemRow";
 import { ItemActionsSheet } from "../components/ItemActionsSheet";
 import { PlanList, PLAN_TITLES, rub } from "../components/PlanList";
 import { CustomPlanCard } from "../components/CustomPlanCard";
-import { ReferralCard } from "../components/ReferralCard";
 import { Badge, Card, ErrorState, SectionLabel, Skeleton } from "../components/ui";
 import { listItems, listPlans, updateItem } from "../lib/api";
 import { useAuthStore } from "../state/auth";
@@ -127,13 +126,6 @@ export function InboxScreen() {
           <SectionLabel>Свой тариф</SectionLabel>
           <CustomPlanCard plans={plans} onCheckout={onCustomCheckout} />
         </section>
-
-        {(profile?.plan === "pro" || profile?.plan === "pro_plus") && (
-          <section className="space-y-2">
-            <SectionLabel>Приглашения</SectionLabel>
-            <ReferralCard />
-          </section>
-        )}
       </main>
       <ItemActionsSheet
         item={selected}

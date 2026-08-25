@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, ShieldCheck } from "lucide-react";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
-import { Card, EmptyState, ErrorState, IconButton, Skeleton, Tag } from "../components/ui";
+import { Card, EmptyState, ErrorState, Skeleton, Tag } from "../components/ui";
 import { SecretDetailSheet } from "../components/SecretDetailSheet";
 import { AddSecretSheet } from "../components/AddSecretSheet";
 import { listSecrets } from "../lib/api";
@@ -41,9 +41,13 @@ export function VaultScreen() {
         title="Сейф"
         eyebrow="Зашифровано на сервере"
         right={
-          <IconButton onClick={() => setAdding(true)} aria-label="Добавить секрет">
-            <Plus size={16} strokeWidth={1.5} />
-          </IconButton>
+          <button
+            onClick={() => setAdding(true)}
+            aria-label="Добавить секрет"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-signal text-void shadow-[0_0_16px_rgba(79,182,214,0.45)] transition-all duration-150 hover:brightness-110 hover:shadow-[0_0_20px_rgba(79,182,214,0.6)] active:scale-90"
+          >
+            <Plus size={20} strokeWidth={2} />
+          </button>
         }
       />
       <main className="space-y-4 px-4 pt-4">

@@ -4,6 +4,7 @@ import { supabaseAdmin } from "./_shared/supabaseAdmin.ts";
 import { looksLikeCredential } from "./_shared/heuristics.ts";
 import { fetchLinkMeta } from "./_shared/linkMeta.ts";
 import { callClassifyModel, attachReminderTimestamps } from "./_shared/classify.ts";
+import { getEffectiveLimits } from "./_shared/planLimits.ts";
 
 Deno.serve(async (req) => {
   const opt = handleOptions(req);
@@ -51,7 +52,7 @@ Deno.serve(async (req) => {
   // checking it, the same way a phone plan's minutes refresh monthly.
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, plan, ai_calls_used, ai_calls_period_start")
+    .select("id, plan, custom_plan, ai_calls_used, ai_calls_period_start")
     .eq("id", session.userId)
     .single();
 
@@ -69,13 +70,9 @@ Deno.serve(async (req) => {
     }
   }
 
-  const { data: plan } = await supabase
-    .from("plans")
-    .select("ai_calls_limit_per_month")
-    .eq("id", profile?.plan ?? "free")
-    .single();
-  if (plan && profile && aiCallsUsed >= plan.ai_calls_limit_per_month) {
-    return json({ error: "ai_limit_reached", limit: plan.ai_calls_limit_per_month }, 402);
+  const limits = profile ? await getEffectiveLimits(supabase, profile) : null;
+  if (limits && profile && aiCallsUsed >= limits.aiCallsLimitPerMonth) {
+    return json({ error: "ai_limit_reached", limit: limits.aiCallsLimitPerMonth }, 402);
   }
 
   let linkMeta = null;
@@ -95,7 +92,7 @@ Deno.serve(async (req) => {
   // OCR (verbatim text-in-image extraction, for search) is a Pro/Premium
   // perk — the vision call happens regardless (needed for classification),
   // this just decides whether we also ask for and keep the literal text.
-  const ocrEnabled = body.kind === "image" && profile?.plan && profile.plan !== "free";
+  const ocrEnabled = body.kind === "image" && Boolean(limits?.ocrEnabled);
   const aiResult = await callClassifyModel(aiInput, { includeOcr: Boolean(ocrEnabled) });
 
   // 3. Safety net: if the AI/OCR pass surfaced credential-shaped text

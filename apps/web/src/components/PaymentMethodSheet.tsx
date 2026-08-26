@@ -7,16 +7,21 @@ import { openInvoice, getInitData } from "../lib/telegram";
 import { useAuthStore } from "../state/auth";
 import { useToastStore } from "../state/toast";
 import type { PlanInfo } from "../types";
+import type { CustomPlanSelection } from "../lib/customPlanPricing";
 
-// Two ways to pay for a ready-made plan: Telegram Stars (live — Telegram
-// itself is the payment provider, no external account needed) or
-// card/SBP via Platega.io (still a stub — see payment-webhook).
+export type PaymentTarget =
+  | { kind: "plan"; plan: PlanInfo }
+  | { kind: "custom"; selection: CustomPlanSelection; priceRub: number; priceStars: number };
+
+// Two ways to pay for a plan — preset or hand-assembled: Telegram Stars
+// (live — Telegram itself is the payment provider, no external account
+// needed) or card/SBP via Platega.io (still a stub — see payment-webhook).
 export function PaymentMethodSheet({
-  plan,
+  target,
   open,
   onClose,
 }: {
-  plan: PlanInfo | null;
+  target: PaymentTarget | null;
   open: boolean;
   onClose: () => void;
 }) {
@@ -25,16 +30,24 @@ export function PaymentMethodSheet({
   const refreshProfile = useAuthStore((s) => s.refreshProfile);
   const [payingStars, setPayingStars] = useState(false);
 
-  if (!plan) return null;
+  if (!target) return null;
 
-  const discounted = Boolean(profile?.hasReferralDiscount);
-  const starsPrice = discounted ? Math.round(plan.price_stars * 0.9) : plan.price_stars;
-  const rubPrice = discounted ? Math.round(plan.price_rub * 0.9) : plan.price_rub;
+  // The custom plan never gets the referral discount — same invariant the
+  // custom-plan card itself documents.
+  const discounted = target.kind === "plan" && Boolean(profile?.hasReferralDiscount);
+  const title = target.kind === "plan" ? PLAN_TITLES[target.plan.id] : "Свой тариф";
+  const starsPrice =
+    target.kind === "plan" ? (discounted ? Math.round(target.plan.price_stars * 0.9) : target.plan.price_stars) : target.priceStars;
+  const rubPrice =
+    target.kind === "plan" ? (discounted ? Math.round(target.plan.price_rub * 0.9) : target.plan.price_rub) : target.priceRub;
 
   const payWithStars = async () => {
     setPayingStars(true);
     try {
-      const { invoiceLink } = await createStarsInvoice(plan.id as "pro" | "pro_plus");
+      const { invoiceLink } =
+        target.kind === "plan"
+          ? await createStarsInvoice({ plan: target.plan.id as "pro" | "pro_plus" })
+          : await createStarsInvoice({ custom: target.selection });
       const status = await openInvoice(invoiceLink);
       if (status === "paid") {
         push("Оплата прошла — тариф обновляется…", "success");
@@ -55,7 +68,10 @@ export function PaymentMethodSheet({
         push("Оплата не прошла — попробуйте ещё раз", "error");
       }
     } catch (err) {
-      const msg = err instanceof ApiError && err.code === "plan_not_purchasable" ? "Этот тариф пока нельзя купить" : "Не удалось создать счёт — попробуйте позже";
+      const msg =
+        err instanceof ApiError && (err.code === "plan_not_purchasable" || err.code === "invalid_custom_selection")
+          ? "Этот тариф пока нельзя купить — попробуйте изменить параметры"
+          : "Не удалось создать счёт — попробуйте позже";
       push(msg, "error");
     } finally {
       setPayingStars(false);
@@ -65,7 +81,7 @@ export function PaymentMethodSheet({
   const payWithPlatega = () => push("Оплата картой/СБП подключается — скоро", "default");
 
   return (
-    <Sheet open={open} onClose={onClose} title={`Оплата: ${PLAN_TITLES[plan.id]}`}>
+    <Sheet open={open} onClose={onClose} title={`Оплата: ${title}`}>
       <div className="space-y-3">
         <p className="text-xs text-slate-dim">Выберите способ оплаты</p>
 

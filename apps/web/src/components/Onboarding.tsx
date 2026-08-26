@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ClipboardPaste, Sparkles, Lock, Check } from "lucide-react";
+import { ClipboardPaste, Sparkles, Lock, Check, Forward } from "lucide-react";
 import clsx from "clsx";
 import { haptic } from "../lib/telegram";
 
@@ -14,6 +14,11 @@ const SLIDES = [
     title: "ИИ сам разберётся",
     text: "Определит тип, категорию и теги — останется только подтвердить.",
     demo: true,
+  },
+  {
+    icon: Forward,
+    title: "Начните с того, что уже есть",
+    text: "Не сохраняйте новое — откройте своё «Избранное» в Telegram и перешлите оттуда несколько сообщений прямо боту. Увидите, как ИИ мгновенно разложит их по категориям.",
   },
   {
     icon: Lock,

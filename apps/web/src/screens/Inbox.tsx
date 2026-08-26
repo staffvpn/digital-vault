@@ -8,12 +8,13 @@ import { ItemRow } from "../components/ItemRow";
 import { ItemActionsSheet } from "../components/ItemActionsSheet";
 import { PlanList, PLAN_TITLES, rub } from "../components/PlanList";
 import { CustomPlanCard } from "../components/CustomPlanCard";
-import { PaymentMethodSheet } from "../components/PaymentMethodSheet";
+import { PaymentMethodSheet, type PaymentTarget } from "../components/PaymentMethodSheet";
 import { Badge, Card, ErrorState, SectionLabel, Skeleton } from "../components/ui";
 import { listItems, listPlans, updateItem } from "../lib/api";
 import { useAuthStore } from "../state/auth";
 import { useToastStore } from "../state/toast";
-import type { CustomPlanSelection } from "../lib/customPlanPricing";
+import { customPlanPrice, customPlanPriceStars, type CustomPlanSelection } from "../lib/customPlanPricing";
+import { formatBytes } from "../lib/typeMeta";
 import type { PlanInfo, VaultItem } from "../types";
 
 export function InboxScreen() {
@@ -21,7 +22,7 @@ export function InboxScreen() {
   const push = useToastStore((s) => s.push);
   const profile = useAuthStore((s) => s.profile);
   const [selected, setSelected] = useState<VaultItem | null>(null);
-  const [paymentPlan, setPaymentPlan] = useState<PlanInfo | null>(null);
+  const [paymentTarget, setPaymentTarget] = useState<PaymentTarget | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["items", "inbox"],
@@ -53,10 +54,10 @@ export function InboxScreen() {
       push("Понижение тарифа — пока через поддержку, скоро появится в приложении", "default");
       return;
     }
-    setPaymentPlan(plan);
+    setPaymentTarget({ kind: "plan", plan });
   };
-  const onCustomCheckout = (_price: number, _sel: CustomPlanSelection) =>
-    push("Оплата подключается — скоро через Platega.io", "default");
+  const onCustomCheckout = (_price: number, sel: CustomPlanSelection) =>
+    setPaymentTarget({ kind: "custom", selection: sel, priceRub: customPlanPrice(sel), priceStars: customPlanPriceStars(sel) });
 
   return (
     <div className="mx-auto min-h-screen max-w-md pb-24">
@@ -107,7 +108,17 @@ export function InboxScreen() {
 
         <section className="space-y-2">
           <SectionLabel>Ваш тариф</SectionLabel>
-          {currentPlan ? (
+          {profile?.customPlan ? (
+            <Card className="flex items-center justify-between p-4">
+              <div>
+                <p className="text-sm font-semibold text-bone">Свой тариф</p>
+                <p className="text-xs text-slate">
+                  {formatBytes(profile.customPlan.storageGb * 1024 ** 3)} · {profile.customPlan.aiCalls} AI-сохранений/мес
+                </p>
+              </div>
+              <Badge tone="signal">Текущий</Badge>
+            </Card>
+          ) : currentPlan ? (
             <Card className="flex items-center justify-between p-4">
               <div>
                 <p className="text-sm font-semibold text-bone">{PLAN_TITLES[currentPlan.id]}</p>
@@ -145,7 +156,7 @@ export function InboxScreen() {
         onClose={() => setSelected(null)}
         onChanged={invalidate}
       />
-      <PaymentMethodSheet plan={paymentPlan} open={Boolean(paymentPlan)} onClose={() => setPaymentPlan(null)} />
+      <PaymentMethodSheet target={paymentTarget} open={Boolean(paymentTarget)} onClose={() => setPaymentTarget(null)} />
       <BottomNav />
     </div>
   );

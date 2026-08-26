@@ -1,6 +1,7 @@
 import { handleOptions, json } from "./_shared/cors.ts";
 import { requireSession } from "./_shared/auth.ts";
 import { supabaseAdmin } from "./_shared/supabaseAdmin.ts";
+import { getEffectiveLimits } from "./_shared/planLimits.ts";
 
 // "Read in 30 seconds" — Premium only (a full extra AI call over the whole
 // page, the priciest single operation in the app, worth reserving for the
@@ -27,10 +28,12 @@ Deno.serve(async (req) => {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("plan, ai_calls_used, ai_calls_period_start")
+    .select("plan, custom_plan, ai_calls_used, ai_calls_period_start")
     .eq("id", session.userId)
     .single();
-  if (profile?.plan !== "pro_plus") {
+  if (!profile) return json({ error: "not_found" }, 404);
+  const limits = await getEffectiveLimits(supabase, profile);
+  if (!limits.summaryEnabled) {
     return json({ error: "premium_required" }, 402);
   }
 
@@ -51,9 +54,8 @@ Deno.serve(async (req) => {
     aiCallsUsed = 0;
     await supabase.from("profiles").update({ ai_calls_used: 0, ai_calls_period_start: currentPeriodStr }).eq("id", session.userId);
   }
-  const { data: plan } = await supabase.from("plans").select("ai_calls_limit_per_month").eq("id", "pro_plus").single();
-  if (plan && aiCallsUsed >= plan.ai_calls_limit_per_month) {
-    return json({ error: "ai_limit_reached", limit: plan.ai_calls_limit_per_month }, 402);
+  if (aiCallsUsed >= limits.aiCallsLimitPerMonth) {
+    return json({ error: "ai_limit_reached", limit: limits.aiCallsLimitPerMonth }, 402);
   }
 
   const apiKey = Deno.env.get("POLZA_API_KEY");

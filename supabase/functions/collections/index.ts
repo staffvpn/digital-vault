@@ -1,6 +1,7 @@
 import { handleOptions, json } from "./_shared/cors.ts";
 import { requireSession } from "./_shared/auth.ts";
 import { supabaseAdmin } from "./_shared/supabaseAdmin.ts";
+import { getEffectiveLimits } from "./_shared/planLimits.ts";
 
 // Shared collections — creating one is Premium (it's the flagship
 // collaboration perk), but joining/viewing one someone else shared with you
@@ -74,8 +75,10 @@ Deno.serve(async (req) => {
     if (!body?.action) return json({ error: "missing_action" }, 400);
 
     if (body.action === "create") {
-      const { data: profile } = await supabase.from("profiles").select("plan").eq("id", session.userId).single();
-      if (profile?.plan !== "pro_plus") return json({ error: "premium_required" }, 402);
+      const { data: profile } = await supabase.from("profiles").select("plan, custom_plan").eq("id", session.userId).single();
+      if (!profile) return json({ error: "not_found" }, 404);
+      const limits = await getEffectiveLimits(supabase, profile);
+      if (!limits.collectionsCreateEnabled) return json({ error: "premium_required" }, 402);
       if (!body.name?.trim()) return json({ error: "missing_name" }, 400);
 
       const { data: collection, error } = await supabase

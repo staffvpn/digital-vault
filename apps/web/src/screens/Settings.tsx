@@ -29,12 +29,26 @@ export function SettingsScreen() {
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-bone">{profile?.firstName || profile?.username || "Пользователь"}</p>
             <p className="text-xs text-slate">
-              Тариф: <span className="text-bone">{PLAN_TITLES[profile?.plan ?? "free"]}</span>
+              Тариф: <span className="text-bone">{profile?.customPlan ? "Свой тариф" : PLAN_TITLES[profile?.plan ?? "free"]}</span>
             </p>
           </div>
         </Card>
 
-        {profile && currentPlan && (
+        {profile?.customPlan && (
+          <Card className="space-y-3 p-4">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-slate-dim">Расход</p>
+            <UsageRow label="Хранилище" used={profile.storageUsedBytes} limit={profile.customPlan.storageGb * 1024 ** 3} format={formatBytes} />
+            <UsageRow label="AI-операции" used={profile.aiCallsUsed} limit={profile.customPlan.aiCalls} format={(n) => `${n}`} />
+            <UsageRow
+              label="Секреты"
+              used={profile.secretsCount}
+              limit={profile.customPlan.secrets + profile.secretsBonus}
+              format={(n) => `${n}`}
+            />
+          </Card>
+        )}
+
+        {profile && !profile.customPlan && currentPlan && (
           <Card className="space-y-3 p-4">
             <p className="text-[11px] font-medium uppercase tracking-wider text-slate-dim">Расход</p>
             <UsageRow label="Хранилище" used={profile.storageUsedBytes} limit={currentPlan.storage_limit_bytes} format={formatBytes} />

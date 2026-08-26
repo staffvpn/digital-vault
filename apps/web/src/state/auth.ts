@@ -65,6 +65,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         secretsBonus: 0,
         referralCode: "PREVIEW1",
         hasReferralDiscount: false,
+        customPlan: null,
       },
     });
   },

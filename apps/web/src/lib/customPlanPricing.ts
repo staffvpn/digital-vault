@@ -82,3 +82,10 @@ export function customPlanPrice(sel: CustomPlanSelection): number {
     featuresTotal;
   return Math.round(raw / 5) * 5;
 }
+
+// Display-only mirror of the server's customPlanPriceStars (same ~1 XTR ≈
+// 1.5₽ rate) — the actual charged amount is always recomputed server-side
+// in create-stars-invoice from the selection, never trusted from here.
+export function customPlanPriceStars(sel: CustomPlanSelection): number {
+  return Math.max(1, Math.round(customPlanPrice(sel) / 1.5 / 5) * 5);
+}

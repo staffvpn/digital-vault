@@ -67,6 +67,13 @@ export interface SecretSummary {
   updated_at: string;
 }
 
+export interface CustomPlanPurchase {
+  storageGb: number;
+  aiCalls: number;
+  secrets: number;
+  features: string[];
+}
+
 export interface Profile {
   id: string;
   username: string | null;
@@ -78,6 +85,7 @@ export interface Profile {
   secretsBonus: number;
   referralCode: string;
   hasReferralDiscount: boolean;
+  customPlan: CustomPlanPurchase | null;
 }
 
 export interface PlanInfo {

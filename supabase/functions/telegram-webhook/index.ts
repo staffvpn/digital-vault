@@ -5,6 +5,8 @@ import { fetchLinkMeta } from "./_shared/linkMeta.ts";
 import { callClassifyModel, attachReminderTimestamps } from "./_shared/classify.ts";
 import { sendTelegramMessage, answerPreCheckoutQuery } from "./_shared/telegramSend.ts";
 import { maybeActivateReferral } from "./_shared/referralActivation.ts";
+import { buildPrivacySections, buildTermsSections, chunkSections } from "./_shared/legalText.ts";
+import { getEffectiveLimits } from "./_shared/planLimits.ts";
 
 // Forward (or just type) anything straight to the bot in its private chat —
 // no need to open the Mini App at all. This is the direct answer to
@@ -70,10 +72,29 @@ Deno.serve(async (req) => {
   if (!chatId || !fromId) return json({ ok: true });
 
   const reply = (text: string) => sendTelegramMessage(botToken, chatId, text);
+  const text: string | undefined = message.text ?? message.caption;
+
+  // Legal documents, right in the bot chat — some payment providers check
+  // these are reachable without opening the Mini App at all. Works even
+  // before the person has ever opened the app (no profile lookup needed),
+  // and needs the live `plans` row for the numbers quoted inside.
+  if (text?.trim().split(/\s|@/)[0] === "/info") {
+    const { data: plans } = await supabase
+      .from("plans")
+      .select("id, price_rub, storage_limit_bytes, ai_calls_limit_per_month, secrets_limit")
+      .order("price_rub", { ascending: true });
+    for (const chunk of chunkSections(buildPrivacySections(plans ?? []))) {
+      await reply(chunk);
+    }
+    for (const chunk of chunkSections(buildTermsSections(plans ?? []))) {
+      await reply(chunk);
+    }
+    return json({ ok: true });
+  }
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, plan, ai_calls_used, ai_calls_period_start, storage_used_bytes")
+    .select("id, plan, custom_plan, ai_calls_used, ai_calls_period_start, storage_used_bytes")
     .eq("telegram_id", fromId)
     .maybeSingle();
 
@@ -90,7 +111,7 @@ Deno.serve(async (req) => {
     const sp = message.successful_payment;
     const { data: payment } = await supabase
       .from("payments")
-      .select("id, status, plan, user_id")
+      .select("id, status, plan, custom_plan, user_id")
       .eq("id", sp.invoice_payload)
       .maybeSingle();
     if (payment && payment.user_id === profile.id && payment.status !== "succeeded") {
@@ -98,18 +119,28 @@ Deno.serve(async (req) => {
         .from("payments")
         .update({ status: "succeeded", provider_ref: sp.telegram_payment_charge_id })
         .eq("id", payment.id);
-      await supabase.from("profiles").update({ plan: payment.plan }).eq("id", profile.id);
-      await supabase.rpc("fn_qualify_referral", { p_referred_id: profile.id, p_plan: payment.plan });
-      await supabase.rpc("fn_consume_referral_discount", { p_user_id: profile.id });
-      await reply(`✅ Оплата получена — тариф обновлён на ${payment.plan === "pro" ? "Pro" : "Premium"}. Спасибо! ⭐`);
+      if (payment.plan) {
+        await supabase.from("profiles").update({ plan: payment.plan }).eq("id", profile.id);
+        // Referral rewards only ever apply to Pro/Premium purchases — a
+        // custom-plan purchase (payment.custom_plan branch below) deliberately
+        // never qualifies or consumes a referral, same invariant as the
+        // Platega webhook stub.
+        await supabase.rpc("fn_qualify_referral", { p_referred_id: profile.id, p_plan: payment.plan });
+        await supabase.rpc("fn_consume_referral_discount", { p_user_id: profile.id });
+        await reply(`✅ Оплата получена — тариф обновлён на ${payment.plan === "pro" ? "Pro" : "Premium"}. Спасибо! ⭐`);
+      } else if (payment.custom_plan) {
+        await supabase.from("profiles").update({ custom_plan: payment.custom_plan }).eq("id", profile.id);
+        await reply("✅ Оплата получена — ваш «Свой тариф» подключён. Спасибо! ⭐");
+      } else {
+        await reply("✅ Оплата получена, спасибо!");
+      }
     } else {
       await reply("✅ Оплата получена, спасибо!");
     }
     return json({ ok: true });
   }
 
-  const text: string | undefined = message.text ?? message.caption;
-  if (text?.startsWith("/")) return json({ ok: true }); // ignore bot commands
+  if (text?.startsWith("/")) return json({ ok: true }); // ignore other bot commands
 
   // AI-call limit — same monthly metering as everywhere else.
   let aiCallsUsed = profile.ai_calls_used ?? 0;
@@ -120,8 +151,8 @@ Deno.serve(async (req) => {
     aiCallsUsed = 0;
     await supabase.from("profiles").update({ ai_calls_used: 0, ai_calls_period_start: currentPeriodStr }).eq("id", profile.id);
   }
-  const { data: planRow } = await supabase.from("plans").select("ai_calls_limit_per_month").eq("id", profile.plan).single();
-  if (planRow && aiCallsUsed >= planRow.ai_calls_limit_per_month) {
+  const limits = await getEffectiveLimits(supabase, profile);
+  if (aiCallsUsed >= limits.aiCallsLimitPerMonth) {
     await reply("Лимит AI-сохранений на этот месяц исчерпан — но переслать вручную в приложении всё ещё можно.");
     return json({ ok: true });
   }
@@ -138,14 +169,13 @@ Deno.serve(async (req) => {
     }
     const fileBytes = await fetch(`https://api.telegram.org/file/bot${botToken}/${filePath}`).then((r) => r.arrayBuffer());
 
-    const { data: planRowForStorage } = await supabase.from("plans").select("storage_limit_bytes").eq("id", profile.plan).single();
-    if (planRowForStorage && profile.storage_used_bytes + fileBytes.byteLength > planRowForStorage.storage_limit_bytes) {
+    if (profile.storage_used_bytes + fileBytes.byteLength > limits.storageLimitBytes) {
       await reply("Не хватает места в хранилище на вашем тарифе — освободите место или перейдите на тариф побольше в приложении.");
       return json({ ok: true });
     }
 
     const base64 = btoa(String.fromCharCode(...new Uint8Array(fileBytes)));
-    const ocrEnabled = profile.plan !== "free";
+    const ocrEnabled = limits.ocrEnabled;
     const aiResult = await callClassifyModel({ imageBase64: base64, mimeType: "image/jpeg" }, { includeOcr: ocrEnabled });
     if (aiResult) {
       // Persist the actual bytes to Storage — the AI call above only ever

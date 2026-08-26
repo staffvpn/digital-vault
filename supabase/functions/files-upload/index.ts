@@ -1,6 +1,7 @@
 import { handleOptions, json } from "./_shared/cors.ts";
 import { requireSession } from "./_shared/auth.ts";
 import { supabaseAdmin } from "./_shared/supabaseAdmin.ts";
+import { getEffectiveLimits } from "./_shared/planLimits.ts";
 
 const BUCKET = "vault-files";
 const MAX_BYTES = 25 * 1024 * 1024; // 25MB — generous for a free-tier MVP
@@ -22,16 +23,14 @@ Deno.serve(async (req) => {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("plan, storage_used_bytes")
+    .select("plan, custom_plan, storage_used_bytes")
     .eq("id", session.userId)
     .single();
-  const { data: plan } = await supabase
-    .from("plans")
-    .select("storage_limit_bytes")
-    .eq("id", profile?.plan ?? "free")
-    .single();
-  if (plan && profile && profile.storage_used_bytes + file.size > plan.storage_limit_bytes) {
-    return json({ error: "storage_limit_reached", limit: plan.storage_limit_bytes }, 402);
+  if (profile) {
+    const limits = await getEffectiveLimits(supabase, profile);
+    if (profile.storage_used_bytes + file.size > limits.storageLimitBytes) {
+      return json({ error: "storage_limit_reached", limit: limits.storageLimitBytes }, 402);
+    }
   }
 
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");

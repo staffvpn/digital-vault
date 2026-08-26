@@ -2,6 +2,7 @@ import { handleOptions, json } from "./_shared/cors.ts";
 import { requireSession } from "./_shared/auth.ts";
 import { supabaseAdmin } from "./_shared/supabaseAdmin.ts";
 import { encryptSecret, decryptSecret } from "./_shared/crypto.ts";
+import { getEffectiveLimits } from "./_shared/planLimits.ts";
 
 Deno.serve(async (req) => {
   const opt = handleOptions(req);
@@ -48,18 +49,17 @@ Deno.serve(async (req) => {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("plan, secrets_count, secrets_bonus")
+      .select("plan, custom_plan, secrets_count, secrets_bonus")
       .eq("id", session.userId)
       .single();
-    const { data: plan } = await supabase
-      .from("plans")
-      .select("secrets_limit")
-      .eq("id", profile?.plan ?? "free")
-      .single();
-    // Referral bonuses add Vault slots on top of the plan's base limit.
-    const effectiveLimit = (plan?.secrets_limit ?? 0) + (profile?.secrets_bonus ?? 0);
-    if (plan && profile && profile.secrets_count >= effectiveLimit) {
-      return json({ error: "secrets_limit_reached", limit: effectiveLimit }, 402);
+    if (profile) {
+      const limits = await getEffectiveLimits(supabase, profile);
+      // Referral bonuses add Vault slots on top of the plan's base limit,
+      // custom or preset alike.
+      const effectiveLimit = limits.secretsLimit + (profile.secrets_bonus ?? 0);
+      if (profile.secrets_count >= effectiveLimit) {
+        return json({ error: "secrets_limit_reached", limit: effectiveLimit }, 402);
+      }
     }
 
     const encrypted = await encryptSecret(body.password, vaultKey);

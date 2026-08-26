@@ -27,10 +27,25 @@ Deno.serve(async (req) => {
     body: JSON.stringify({
       url: webhookUrl,
       secret_token: expectedSecret,
-      allowed_updates: ["message"],
+      // pre_checkout_query is needed for Telegram Stars payments alongside
+      // message updates.
+      allowed_updates: ["message", "pre_checkout_query"],
       drop_pending_updates: true,
     }),
   });
   const data = await res.json().catch(() => null);
-  return json({ ok: res.ok, telegram: data });
+
+  // /info shows up in the command autocomplete — the actual reply is
+  // handled in telegram-webhook. Payment providers (e.g. Platega.io) want
+  // the legal documents reachable from inside the bot chat itself.
+  const commandsRes = await fetch(`https://api.telegram.org/bot${botToken}/setMyCommands`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      commands: [{ command: "info", description: "Политика конфиденциальности и условия использования" }],
+    }),
+  });
+  const commandsData = await commandsRes.json().catch(() => null);
+
+  return json({ ok: res.ok, telegram: data, commands: commandsData });
 });

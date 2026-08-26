@@ -91,6 +91,7 @@ Deno.serve(async (req) => {
       secretsCount: profile.secrets_count,
       secretsBonus: profile.secrets_bonus,
       referralCode: profile.referral_code,
+      customPlan: profile.custom_plan ?? null,
       // One-time 10% off Pro/Premium for someone who signed up via a
       // referral link and hasn't bought either yet — never applies to the
       // custom plan.

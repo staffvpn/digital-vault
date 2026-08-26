@@ -1,6 +1,7 @@
 import { handleOptions, json } from "./_shared/cors.ts";
 import { requireSession } from "./_shared/auth.ts";
 import { supabaseAdmin } from "./_shared/supabaseAdmin.ts";
+import { maybeActivateReferral } from "./_shared/referralActivation.ts";
 
 Deno.serve(async (req) => {
   const opt = handleOptions(req);
@@ -47,6 +48,7 @@ Deno.serve(async (req) => {
       .select("*")
       .single();
     if (error) return json({ error: error.message }, 500);
+    await maybeActivateReferral(supabase, session.userId);
     return json({ item: data }, 201);
   }
 

@@ -113,12 +113,15 @@ export interface ReferredUser {
   status: ReferralUserStatus;
   createdAt: string;
   rewardAmount: number;
+  activated: boolean;
+  activationRewardAmount: number;
 }
 
 export interface ReferralInfo {
   code: string;
   bonusSecrets: number;
   rewardPerReferral: { pro: number; pro_plus: number };
+  activationReward: number;
   maxBonusSecrets: number;
   stats: ReferralStats;
   referredUsers: ReferredUser[];

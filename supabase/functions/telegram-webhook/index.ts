@@ -4,6 +4,7 @@ import { looksLikeCredential } from "./_shared/heuristics.ts";
 import { fetchLinkMeta } from "./_shared/linkMeta.ts";
 import { callClassifyModel, attachReminderTimestamps } from "./_shared/classify.ts";
 import { sendTelegramMessage, answerPreCheckoutQuery } from "./_shared/telegramSend.ts";
+import { maybeActivateReferral } from "./_shared/referralActivation.ts";
 
 // Forward (or just type) anything straight to the bot in its private chat —
 // no need to open the Mini App at all. This is the direct answer to
@@ -263,6 +264,7 @@ Deno.serve(async (req) => {
   }
 
   if (saved) {
+    await maybeActivateReferral(supabase, profile.id);
     await reply(`✅ Сохранено: ${saved.title ?? "без названия"}`);
   } else {
     await reply("Не удалось разобрать — попробуйте ещё раз или через приложение.");

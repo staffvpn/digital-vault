@@ -25,12 +25,17 @@ Deno.serve(async (req) => {
   const { data: config } = await supabase
     .from("app_config")
     .select("key, value")
-    .in("key", ["referral_reward_secrets_pro", "referral_reward_secrets_premium", "referral_max_bonus_secrets"]);
+    .in("key", [
+      "referral_reward_secrets_pro",
+      "referral_reward_secrets_premium",
+      "referral_max_bonus_secrets",
+      "referral_activation_reward_secrets",
+    ]);
   const configMap = Object.fromEntries((config ?? []).map((c) => [c.key, c.value]));
 
   const { data: referrals } = await supabase
     .from("referrals")
-    .select("referred_id, status, created_at, reward_amount")
+    .select("referred_id, status, created_at, reward_amount, activated_at, activation_reward_amount")
     .eq("referrer_id", session.userId)
     .order("created_at", { ascending: false });
 
@@ -58,6 +63,8 @@ Deno.serve(async (req) => {
       status: r.status,
       createdAt: r.created_at,
       rewardAmount: r.reward_amount,
+      activated: Boolean(r.activated_at),
+      activationRewardAmount: r.activation_reward_amount,
     };
   });
 
@@ -68,6 +75,10 @@ Deno.serve(async (req) => {
       pro: configMap.referral_reward_secrets_pro ?? 2,
       pro_plus: configMap.referral_reward_secrets_premium ?? 4,
     },
+    // The small activation bonus — for both sides, the moment the referred
+    // person makes their first real save, no purchase required. Stacks
+    // into the same lifetime cap as the paid reward below.
+    activationReward: configMap.referral_activation_reward_secrets ?? 1,
     maxBonusSecrets: configMap.referral_max_bonus_secrets ?? 20,
     stats,
     referredUsers,

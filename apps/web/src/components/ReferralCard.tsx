@@ -84,15 +84,15 @@ export function ReferralCard() {
         <div>
           <p className="text-sm font-semibold text-bone">Пригласить друга</p>
           <p className="text-xs text-slate-dim">
-            +{data.rewardPerReferral.pro} места за Pro или +{data.rewardPerReferral.pro_plus} за Premium — когда друг
-            оплатит
+            +{data.activationReward} место, как только друг сделает первое сохранение, и ещё +{data.rewardPerReferral.pro}{" "}
+            за Pro или +{data.rewardPerReferral.pro_plus} за Premium — когда он оплатит
           </p>
         </div>
       </div>
 
       <p className="rounded-md border border-signal-dim/40 bg-signal/5 px-3 py-2 text-xs leading-relaxed text-slate">
-        Другу тоже выгодно: по вашей ссылке он получает <span className="text-bone">скидку 10%</span> на первую
-        оплату Pro или Premium.
+        Другу тоже выгодно: он сразу получает <span className="text-bone">+{data.activationReward} место в Сейфе</span>{" "}
+        за первое сохранение и <span className="text-bone">скидку 10%</span> на первую оплату Pro или Premium.
       </p>
 
       <div className="flex items-center gap-2 rounded-md border border-hairline bg-graphite-raised px-3 py-2">
@@ -121,18 +121,28 @@ export function ReferralCard() {
             Перешли по ссылке ({data.referredUsers.length})
           </p>
           <div className="divide-y divide-hairline">
-            {data.referredUsers.map((u, i) => (
-              <div key={i} className="flex items-center justify-between gap-2 py-2">
-                <div className="min-w-0">
-                  <p className="truncate text-xs text-bone">{u.name}</p>
-                  <p className="text-[10px] text-slate-dim">{relativeDate(u.createdAt)}</p>
+            {data.referredUsers.map((u, i) => {
+              // "Начал пользоваться" reflects reality more honestly than a
+              // flat "Ждём оплату" once the friend has actually made their
+              // first save — even though the paid-referral status column
+              // itself hasn't moved (it only tracks the purchase reward).
+              const showActivated = u.activated && (u.status === "registered" || u.status === "payment_pending");
+              return (
+                <div key={i} className="flex items-center justify-between gap-2 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs text-bone">{u.name}</p>
+                    <p className="text-[10px] text-slate-dim">{relativeDate(u.createdAt)}</p>
+                  </div>
+                  <span
+                    className={clsx("shrink-0 text-[11px] font-medium", showActivated ? "text-moss" : STATUS_TONE[u.status])}
+                  >
+                    {showActivated ? "Начал пользоваться" : STATUS_LABEL[u.status]}
+                    {showActivated && u.activationRewardAmount > 0 ? ` (+${u.activationRewardAmount})` : ""}
+                    {!showActivated && u.rewardAmount > 0 ? ` (+${u.rewardAmount})` : ""}
+                  </span>
                 </div>
-                <span className={clsx("shrink-0 text-[11px] font-medium", STATUS_TONE[u.status])}>
-                  {STATUS_LABEL[u.status]}
-                  {u.rewardAmount > 0 ? ` (+${u.rewardAmount})` : ""}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

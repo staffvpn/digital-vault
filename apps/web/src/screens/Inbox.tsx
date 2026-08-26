@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/BottomNav";
 import { CaptureZone } from "../components/CaptureZone";
+import { ForwardSavedNudge } from "../components/ForwardSavedNudge";
 import { ItemRow } from "../components/ItemRow";
 import { ItemActionsSheet } from "../components/ItemActionsSheet";
 import { PlanList, PLAN_TITLES, rub } from "../components/PlanList";
@@ -61,6 +62,8 @@ export function InboxScreen() {
     <div className="mx-auto min-h-screen max-w-md pb-24">
       <Header title="Входящие" eyebrow="Личное хранилище" />
       <main className="space-y-6 px-4 pt-4">
+        {profile && profile.aiCallsUsed === 0 && <ForwardSavedNudge />}
+
         <CaptureZone onSaved={invalidate} />
 
         {!isLoading && !isError && data && data.length > 0 && (

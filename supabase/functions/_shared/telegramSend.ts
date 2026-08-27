@@ -49,6 +49,22 @@ export async function sendTelegramDocument(
   });
 }
 
+// Removes the original voice note once it's been transcribed, classified and
+// saved — the audio itself never needs to stick around in the chat, only
+// what it turned into. Bots can delete their own outgoing messages and any
+// *incoming* message in a private chat, which is exactly this case.
+export async function deleteTelegramMessage(
+  botToken: string,
+  chatId: number,
+  messageId: number,
+): Promise<void> {
+  await fetch(`https://api.telegram.org/bot${botToken}/deleteMessage`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
+  });
+}
+
 // Closes the little loading spinner Telegram shows on the tapped button —
 // callback_query buttons stay "stuck" in that spinner until this is called,
 // even though sending a reply message on its own already looks like a

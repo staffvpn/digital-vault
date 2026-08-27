@@ -131,6 +131,29 @@ export async function callClassifyModel(
   }
 }
 
+// Speech-to-text via Polza.ai's Whisper endpoint (OpenAI-compatible
+// /audio/transcriptions) — same model the in-app voice-capture button uses,
+// so a voice message forwarded straight to the bot is transcribed exactly
+// the same way as one recorded inside the Mini App.
+export async function transcribeVoice(bytes: ArrayBuffer, filename: string, mimeType: string): Promise<string | null> {
+  const apiKey = Deno.env.get("POLZA_API_KEY");
+  if (!apiKey) return null;
+
+  const form = new FormData();
+  form.append("file", new Blob([bytes], { type: mimeType }), filename);
+  form.append("model", "openai/whisper-large-v3-turbo");
+
+  const res = await fetch("https://polza.ai/api/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { authorization: `Bearer ${apiKey}` },
+    body: form,
+  });
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => null);
+  const text: string | undefined = data?.text;
+  return text?.trim() || null;
+}
+
 // Attaches remind_notify_1/2 onto an AI result in place, or demotes it back
 // to a plain note if the model produced an unparseable date — never create a
 // reminder that can never fire.

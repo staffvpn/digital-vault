@@ -2,10 +2,11 @@ import { handleOptions, json } from "./_shared/cors.ts";
 import { supabaseAdmin } from "./_shared/supabaseAdmin.ts";
 import { looksLikeCredential } from "./_shared/heuristics.ts";
 import { fetchLinkMeta } from "./_shared/linkMeta.ts";
-import { callClassifyModel, attachReminderTimestamps } from "./_shared/classify.ts";
+import { callClassifyModel, attachReminderTimestamps, transcribeVoice } from "./_shared/classify.ts";
 import {
   sendTelegramMessage,
   sendTelegramDocument,
+  deleteTelegramMessage,
   answerPreCheckoutQuery,
   answerCallbackQuery,
   getBotUsername,
@@ -42,6 +43,85 @@ async function sendLegalDocuments(supabase: any, botToken: string, chatId: numbe
     joinDocument(buildTermsSections(plans ?? [])),
     "Пользовательское соглашение",
   );
+}
+
+// The classify-and-save pipeline shared by pasted/forwarded text and by
+// voice messages once transcribed to text — one piece of text in, one saved
+// item (note, reminder, link…) out. Handles the credential guard, the
+// duplicate-URL check and the actual AI call + insert.
+// deno-lint-ignore no-explicit-any
+async function classifyAndSaveText(
+  supabase: any,
+  profileId: string,
+  aiCallsUsed: number,
+  trimmed: string,
+  reply: (text: string) => Promise<unknown>,
+): Promise<{ id: string; title: string | null } | null> {
+  if (looksLikeCredential(trimmed)) {
+    await reply("Похоже на пароль — такое, пожалуйста, сохраняйте прямо в приложении, в Сейф, а не пересылкой сюда.");
+    return null;
+  }
+
+  let isUrl = false;
+  try {
+    const u = new URL(trimmed);
+    isUrl = u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    isUrl = false;
+  }
+
+  if (isUrl) {
+    const { data: existing } = await supabase
+      .from("items")
+      .select("id, title")
+      .eq("user_id", profileId)
+      .eq("source_url", trimmed)
+      .maybeSingle();
+    if (existing) {
+      await reply(`Уже сохранено: ${existing.title ?? trimmed}`);
+      return null;
+    }
+  }
+
+  const linkMeta = isUrl ? await fetchLinkMeta(trimmed) : null;
+  const aiInput = isUrl
+    ? { text: `URL: ${trimmed}\nTitle: ${linkMeta?.title}\nDescription: ${linkMeta?.description}\nDomain: ${linkMeta?.domain}` }
+    : { text: trimmed };
+  const aiResult = await callClassifyModel(aiInput);
+
+  if (aiResult && looksLikeCredential(aiResult.title ?? "")) {
+    await reply("Похоже на пароль — такое, пожалуйста, сохраняйте прямо в приложении, в Сейф, а не пересылкой сюда.");
+    return null;
+  }
+  if (!aiResult) return null;
+
+  attachReminderTimestamps(aiResult);
+  await supabase.from("usage_events").insert({ user_id: profileId, kind: "ai_call" });
+  await supabase.from("profiles").update({ ai_calls_used: aiCallsUsed + 1 }).eq("id", profileId);
+  const { data: item } = await supabase
+    .from("items")
+    .insert({
+      user_id: profileId,
+      type: aiResult.type ?? (isUrl ? "link" : "text"),
+      category: aiResult.category ?? null,
+      subcategory: aiResult.subcategory ?? null,
+      title: aiResult.title ?? trimmed.slice(0, 80),
+      description: aiResult.description ?? null,
+      body: !isUrl ? trimmed : null,
+      source_url: isUrl ? trimmed : null,
+      source_domain: linkMeta?.domain ?? null,
+      preview_url: linkMeta?.image ?? null,
+      status: "saved",
+      confidence: aiResult.confidence ?? null,
+      remind_at: aiResult.remind_at ?? null,
+      remind_has_time: aiResult.remind_has_time ?? false,
+      remind_notify_1: aiResult.remind_notify_1 ?? null,
+      remind_notify_2: aiResult.remind_notify_2 ?? null,
+    })
+    .select("id, title")
+    .single();
+
+  return item ?? null;
 }
 
 // Forward (or just type) anything straight to the bot in its private chat —
@@ -254,6 +334,9 @@ Deno.serve(async (req) => {
   }
 
   let saved: { id: string; title: string | null } | null = null;
+  // Only set once a voice note has actually been turned into a saved item —
+  // that's the trigger to delete the original recording from the chat.
+  let voiceMessageId: number | null = null;
 
   if (message.photo?.length) {
     const largest = message.photo[message.photo.length - 1];
@@ -320,78 +403,44 @@ Deno.serve(async (req) => {
       }
       saved = item;
     }
+  } else if (message.voice) {
+    // Voice note → bytes → Whisper → same classify-and-save pipeline as
+    // typed text. No storage-limit check here: unlike photos, the audio
+    // itself is never kept — only the transcribed, classified item is.
+    const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${message.voice.file_id}`).then((r) =>
+      r.json()
+    );
+    const filePath = fileRes?.result?.file_path;
+    if (!filePath) {
+      await reply("Не получилось скачать голосовое сообщение 🙁");
+      return json({ ok: true });
+    }
+    const fileBytes = await fetch(`https://api.telegram.org/file/bot${botToken}/${filePath}`).then((r) => r.arrayBuffer());
+
+    const transcribed = await transcribeVoice(fileBytes, "voice.ogg", message.voice.mime_type ?? "audio/ogg");
+    if (!transcribed) {
+      await reply("Не удалось распознать голосовое — попробуйте ещё раз или напишите текстом.");
+      return json({ ok: true });
+    }
+
+    // Transcription is its own AI call (same as the in-app voice button),
+    // classification below is a second one — matches what recording the
+    // same note inside the Mini App would cost.
+    await supabase.from("usage_events").insert({ user_id: profile.id, kind: "ai_call" });
+    await supabase.from("profiles").update({ ai_calls_used: aiCallsUsed + 1 }).eq("id", profile.id);
+
+    saved = await classifyAndSaveText(supabase, profile.id, aiCallsUsed + 1, transcribed, reply);
+    if (saved) voiceMessageId = message.message_id;
   } else if (text?.trim()) {
-    const trimmed = text.trim();
-    if (looksLikeCredential(trimmed)) {
-      await reply("Похоже на пароль — такое, пожалуйста, сохраняйте прямо в приложении, в Сейф, а не пересылкой сюда.");
-      return json({ ok: true });
-    }
-
-    let isUrl = false;
-    try {
-      const u = new URL(trimmed);
-      isUrl = u.protocol === "http:" || u.protocol === "https:";
-    } catch {
-      isUrl = false;
-    }
-
-    if (isUrl) {
-      const { data: existing } = await supabase
-        .from("items")
-        .select("id, title")
-        .eq("user_id", profile.id)
-        .eq("source_url", trimmed)
-        .maybeSingle();
-      if (existing) {
-        await reply(`Уже сохранено: ${existing.title ?? trimmed}`);
-        return json({ ok: true });
-      }
-    }
-
-    const linkMeta = isUrl ? await fetchLinkMeta(trimmed) : null;
-    const aiInput = isUrl
-      ? { text: `URL: ${trimmed}\nTitle: ${linkMeta?.title}\nDescription: ${linkMeta?.description}\nDomain: ${linkMeta?.domain}` }
-      : { text: trimmed };
-    const aiResult = await callClassifyModel(aiInput);
-
-    if (aiResult && looksLikeCredential(aiResult.title ?? "")) {
-      await reply("Похоже на пароль — такое, пожалуйста, сохраняйте прямо в приложении, в Сейф, а не пересылкой сюда.");
-      return json({ ok: true });
-    }
-
-    if (aiResult) {
-      attachReminderTimestamps(aiResult);
-      await supabase.from("usage_events").insert({ user_id: profile.id, kind: "ai_call" });
-      await supabase.from("profiles").update({ ai_calls_used: aiCallsUsed + 1 }).eq("id", profile.id);
-      const { data: item } = await supabase
-        .from("items")
-        .insert({
-          user_id: profile.id,
-          type: aiResult.type ?? (isUrl ? "link" : "text"),
-          category: aiResult.category ?? null,
-          subcategory: aiResult.subcategory ?? null,
-          title: aiResult.title ?? trimmed.slice(0, 80),
-          description: aiResult.description ?? null,
-          body: !isUrl ? trimmed : null,
-          source_url: isUrl ? trimmed : null,
-          source_domain: linkMeta?.domain ?? null,
-          preview_url: linkMeta?.image ?? null,
-          status: "saved",
-          confidence: aiResult.confidence ?? null,
-          remind_at: aiResult.remind_at ?? null,
-          remind_has_time: aiResult.remind_has_time ?? false,
-          remind_notify_1: aiResult.remind_notify_1 ?? null,
-          remind_notify_2: aiResult.remind_notify_2 ?? null,
-        })
-        .select("id, title")
-        .single();
-      saved = item;
-    }
+    saved = await classifyAndSaveText(supabase, profile.id, aiCallsUsed, text.trim(), reply);
   }
 
   if (saved) {
     await maybeActivateReferral(supabase, profile.id);
     await reply(`✅ Сохранено: ${saved.title ?? "без названия"}`);
+    if (voiceMessageId) {
+      await deleteTelegramMessage(botToken, chatId, voiceMessageId);
+    }
   } else {
     await reply("Не удалось разобрать — попробуйте ещё раз или через приложение.");
   }

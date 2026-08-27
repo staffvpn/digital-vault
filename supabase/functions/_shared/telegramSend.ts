@@ -2,18 +2,58 @@
 // reply with a confirmation after saving something forwarded to the bot,
 // and to answer the Stars-payment handshake (pre_checkout_query).
 
+export interface InlineButton {
+  text: string;
+  url?: string;
+  callback_data?: string;
+}
+
 export async function sendTelegramMessage(
   botToken: string,
   chatId: number,
   text: string,
+  opts: { keyboard?: InlineButton[][]; parseMode?: "HTML" | "Markdown" } = {},
 ): Promise<{ ok: boolean; messageId: number | null }> {
   const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text }),
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      parse_mode: opts.parseMode,
+      reply_markup: opts.keyboard ? { inline_keyboard: opts.keyboard } : undefined,
+      link_preview_options: { is_disabled: true },
+    }),
   });
   const data = await res.json().catch(() => null);
   return { ok: res.ok, messageId: data?.result?.message_id ?? null };
+}
+
+// Closes the little loading spinner Telegram shows on the tapped button —
+// callback_query buttons stay "stuck" in that spinner until this is called,
+// even though sending a reply message on its own already looks like a
+// response. `text` (optional) pops a small transient toast instead of a
+// full message, for a one-line acknowledgement.
+export async function answerCallbackQuery(
+  botToken: string,
+  callbackQueryId: string,
+  text?: string,
+): Promise<void> {
+  await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ callback_query_id: callbackQueryId, text }),
+  });
+}
+
+// The bot's own @username, needed to build t.me deep links from inside the
+// webhook — fetched live rather than duplicated as a hardcoded constant or
+// env var, since Telegram already knows it and it can never drift out of
+// sync this way.
+export async function getBotUsername(botToken: string): Promise<string | null> {
+  const res = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
+  const data = await res.json().catch(() => null);
+  return data?.result?.username ?? null;
 }
 
 // Telegram requires this within 10s of every pre_checkout_query or the

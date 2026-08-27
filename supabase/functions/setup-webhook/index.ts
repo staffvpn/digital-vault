@@ -27,9 +27,10 @@ Deno.serve(async (req) => {
     body: JSON.stringify({
       url: webhookUrl,
       secret_token: expectedSecret,
-      // pre_checkout_query is needed for Telegram Stars payments alongside
-      // message updates.
-      allowed_updates: ["message", "pre_checkout_query"],
+      // pre_checkout_query is needed for Telegram Stars payments,
+      // callback_query for the /start post's inline buttons ("Инфо",
+      // "Поддержка"), alongside plain message updates.
+      allowed_updates: ["message", "pre_checkout_query", "callback_query"],
       drop_pending_updates: true,
     }),
   });

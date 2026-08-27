@@ -23,6 +23,7 @@ import { CollectionDetailScreen } from "./screens/CollectionDetail";
 import { SearchScreen } from "./screens/Search";
 import { SettingsScreen } from "./screens/Settings";
 import { InfoScreen } from "./screens/Info";
+import { AdminScreen } from "./screens/Admin";
 
 function AuthGate() {
   const { status, error, bootstrap, enterPreviewMode } = useAuthStore();
@@ -113,6 +114,13 @@ export default function App() {
     localStorage.setItem(ONBOARDING_KEY, "1");
     setShowOnboarding(false);
   };
+
+  // The admin dashboard is opened directly in a plain browser by the
+  // founder, never through Telegram — it needs to bypass the Telegram
+  // AuthGate entirely rather than compete with it for the same routes.
+  if (window.location.pathname.startsWith("/admin")) {
+    return <AdminScreen />;
+  }
 
   return (
     <>

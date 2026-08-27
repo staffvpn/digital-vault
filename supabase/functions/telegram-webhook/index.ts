@@ -3,10 +3,15 @@ import { supabaseAdmin } from "./_shared/supabaseAdmin.ts";
 import { looksLikeCredential } from "./_shared/heuristics.ts";
 import { fetchLinkMeta } from "./_shared/linkMeta.ts";
 import { callClassifyModel, attachReminderTimestamps } from "./_shared/classify.ts";
-import { sendTelegramMessage, answerPreCheckoutQuery } from "./_shared/telegramSend.ts";
+import { sendTelegramMessage, answerPreCheckoutQuery, answerCallbackQuery, getBotUsername } from "./_shared/telegramSend.ts";
 import { maybeActivateReferral } from "./_shared/referralActivation.ts";
-import { buildPrivacySections, buildTermsSections, chunkSections } from "./_shared/legalText.ts";
+import { buildPrivacySections, buildTermsSections, chunkSections, CONTACT_EMAIL } from "./_shared/legalText.ts";
 import { getEffectiveLimits } from "./_shared/planLimits.ts";
+
+// Registered once with @BotFather via /newapp — this is fixed registration
+// metadata, not a secret, and there's no Bot API call that returns it, so
+// it's a constant here rather than duplicated as another env var.
+const MINIAPP_SHORTNAME = "ncht";
 
 // Forward (or just type) anything straight to the bot in its private chat —
 // no need to open the Mini App at all. This is the direct answer to
@@ -64,6 +69,32 @@ Deno.serve(async (req) => {
     return json({ ok: true });
   }
 
+  // The "ℹ️ Инфо" / "🆘 Поддержка" buttons under the /start post are
+  // callback_query updates, not messages — same reasoning as
+  // pre_checkout_query above, handled before the message-only paths.
+  if (update?.callback_query) {
+    const cq = update.callback_query;
+    const cqChatId: number | undefined = cq.message?.chat?.id;
+    if (cqChatId) {
+      if (cq.data === "info") {
+        const { data: plans } = await supabase
+          .from("plans")
+          .select("id, price_rub, storage_limit_bytes, ai_calls_limit_per_month, secrets_limit")
+          .order("price_rub", { ascending: true });
+        for (const chunk of chunkSections(buildPrivacySections(plans ?? []))) {
+          await sendTelegramMessage(botToken, cqChatId, chunk);
+        }
+        for (const chunk of chunkSections(buildTermsSections(plans ?? []))) {
+          await sendTelegramMessage(botToken, cqChatId, chunk);
+        }
+      } else if (cq.data === "support") {
+        await sendTelegramMessage(botToken, cqChatId, `По любым вопросам — напишите на ${CONTACT_EMAIL}`);
+      }
+    }
+    await answerCallbackQuery(botToken, cq.id);
+    return json({ ok: true });
+  }
+
   const message = update?.message;
   if (!message) return json({ ok: true }); // non-message update (edits, etc.) — nothing to do
 
@@ -73,12 +104,13 @@ Deno.serve(async (req) => {
 
   const reply = (text: string) => sendTelegramMessage(botToken, chatId, text);
   const text: string | undefined = message.text ?? message.caption;
+  const command = text?.trim().split(/\s|@/)[0];
 
   // Legal documents, right in the bot chat — some payment providers check
   // these are reachable without opening the Mini App at all. Works even
   // before the person has ever opened the app (no profile lookup needed),
   // and needs the live `plans` row for the numbers quoted inside.
-  if (text?.trim().split(/\s|@/)[0] === "/info") {
+  if (command === "/info") {
     const { data: plans } = await supabase
       .from("plans")
       .select("id, price_rub, storage_limit_bytes, ai_calls_limit_per_month, secrets_limit")
@@ -94,9 +126,60 @@ Deno.serve(async (req) => {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, plan, custom_plan, ai_calls_used, ai_calls_period_start, storage_used_bytes")
+    .select("id, plan, custom_plan, ai_calls_used, ai_calls_period_start, storage_used_bytes, referral_code")
     .eq("telegram_id", fromId)
     .maybeSingle();
+
+  // The welcome post — works whether or not the person has ever opened
+  // the Mini App (that's normally the very first thing a new user does:
+  // press Start before anything else exists for them), so it has to run
+  // before the "open the app first" gate below. Includes a personal
+  // referral link only once a profile actually exists.
+  if (command === "/start") {
+    const botUsername = await getBotUsername(botToken);
+    const appLink = botUsername ? `https://t.me/${botUsername}/${MINIAPP_SHORTNAME}` : null;
+    const referralLink = appLink && profile?.referral_code ? `${appLink}?startapp=${profile.referral_code}` : null;
+    const firstName: string = message.from?.first_name ?? "";
+
+    const body = [
+      `Привет${firstName ? `, ${firstName}` : ""}! 👋`,
+      "",
+      "<b>NCHT Notion</b>",
+      "<i>Избранное, которое думает за вас</i>",
+      "",
+      "Просто перешлите сюда что угодно — ссылку, текст, скриншот, голосовое — и я сам разложу это по категориям, а потом найду похожее.",
+      "",
+      "Что умею:",
+      "• Пересылка прямо из чата — без открытия приложения",
+      "• ИИ сам определяет тип и категорию, находит дубли",
+      "• OCR по скриншотам и пересказ статей за 30 секунд (Pro/Premium)",
+      "• Голосовые заметки и напоминания точно ко времени",
+      "• Пароли и ключи — отдельно, зашифрованно, никогда не через ИИ",
+      "",
+      "Free — бесплатно, 50 AI-сохранений в месяц и 5 паролей в Сейфе. Pro — 249 ₽/мес. Premium — 449 ₽/мес. Можно оплатить звёздами Telegram.",
+      "",
+      "Откройте приложение и перешлите сюда что-нибудь из своего Избранного в Telegram — эффект видно сразу.",
+    ].join("\n");
+
+    const keyboard = appLink
+      ? [
+          [{ text: "🚀 Открыть приложение", url: appLink }],
+          [
+            { text: "ℹ️ Инфо", callback_data: "info" },
+            { text: "🆘 Поддержка", callback_data: "support" },
+          ],
+          referralLink
+            ? [
+                { text: "💳 Тарифы", url: appLink },
+                { text: "🎁 Пригласить друга", url: referralLink },
+              ]
+            : [{ text: "💳 Тарифы", url: appLink }],
+        ]
+      : undefined;
+
+    await sendTelegramMessage(botToken, chatId, body, { keyboard, parseMode: "HTML" });
+    return json({ ok: true });
+  }
 
   if (!profile) {
     await reply("Сначала откройте приложение через кнопку меню хотя бы один раз — тогда я буду знать, кто вы 🙂");

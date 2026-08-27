@@ -29,6 +29,26 @@ export async function sendTelegramMessage(
   return { ok: res.ok, messageId: data?.result?.message_id ?? null };
 }
 
+// Sends a document as an actual file attachment (multipart upload), not a
+// chat message — used for the Privacy Policy / Terms of Use so /info
+// delivers exactly two files, not a wall of chained text messages.
+export async function sendTelegramDocument(
+  botToken: string,
+  chatId: number,
+  filename: string,
+  content: string,
+  caption?: string,
+): Promise<void> {
+  const form = new FormData();
+  form.append("chat_id", String(chatId));
+  if (caption) form.append("caption", caption);
+  form.append("document", new Blob([content], { type: "text/plain; charset=utf-8" }), filename);
+  await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
+    method: "POST",
+    body: form,
+  });
+}
+
 // Closes the little loading spinner Telegram shows on the tapped button —
 // callback_query buttons stay "stuck" in that spinner until this is called,
 // even though sending a reply message on its own already looks like a

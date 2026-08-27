@@ -3,15 +3,46 @@ import { supabaseAdmin } from "./_shared/supabaseAdmin.ts";
 import { looksLikeCredential } from "./_shared/heuristics.ts";
 import { fetchLinkMeta } from "./_shared/linkMeta.ts";
 import { callClassifyModel, attachReminderTimestamps } from "./_shared/classify.ts";
-import { sendTelegramMessage, answerPreCheckoutQuery, answerCallbackQuery, getBotUsername } from "./_shared/telegramSend.ts";
+import {
+  sendTelegramMessage,
+  sendTelegramDocument,
+  answerPreCheckoutQuery,
+  answerCallbackQuery,
+  getBotUsername,
+} from "./_shared/telegramSend.ts";
 import { maybeActivateReferral } from "./_shared/referralActivation.ts";
-import { buildPrivacySections, buildTermsSections, chunkSections, CONTACT_EMAIL } from "./_shared/legalText.ts";
+import { buildPrivacySections, buildTermsSections, joinDocument, CONTACT_EMAIL, CONTACT_TELEGRAM } from "./_shared/legalText.ts";
 import { getEffectiveLimits } from "./_shared/planLimits.ts";
 
 // Registered once with @BotFather via /newapp — this is fixed registration
 // metadata, not a secret, and there's no Bot API call that returns it, so
 // it's a constant here rather than duplicated as another env var.
 const MINIAPP_SHORTNAME = "ncht";
+
+// Sends exactly two file attachments — Privacy Policy and Terms of Use —
+// never chained chat messages. Shared between /info and the "Инфо" button
+// under the /start post so both paths stay identical.
+// deno-lint-ignore no-explicit-any
+async function sendLegalDocuments(supabase: any, botToken: string, chatId: number): Promise<void> {
+  const { data: plans } = await supabase
+    .from("plans")
+    .select("id, price_rub, storage_limit_bytes, ai_calls_limit_per_month, secrets_limit")
+    .order("price_rub", { ascending: true });
+  await sendTelegramDocument(
+    botToken,
+    chatId,
+    "Политика конфиденциальности NCHT Notion.txt",
+    joinDocument(buildPrivacySections(plans ?? [])),
+    "Политика конфиденциальности",
+  );
+  await sendTelegramDocument(
+    botToken,
+    chatId,
+    "Пользовательское соглашение NCHT Notion.txt",
+    joinDocument(buildTermsSections(plans ?? [])),
+    "Пользовательское соглашение",
+  );
+}
 
 // Forward (or just type) anything straight to the bot in its private chat —
 // no need to open the Mini App at all. This is the direct answer to
@@ -77,18 +108,9 @@ Deno.serve(async (req) => {
     const cqChatId: number | undefined = cq.message?.chat?.id;
     if (cqChatId) {
       if (cq.data === "info") {
-        const { data: plans } = await supabase
-          .from("plans")
-          .select("id, price_rub, storage_limit_bytes, ai_calls_limit_per_month, secrets_limit")
-          .order("price_rub", { ascending: true });
-        for (const chunk of chunkSections(buildPrivacySections(plans ?? []))) {
-          await sendTelegramMessage(botToken, cqChatId, chunk);
-        }
-        for (const chunk of chunkSections(buildTermsSections(plans ?? []))) {
-          await sendTelegramMessage(botToken, cqChatId, chunk);
-        }
+        await sendLegalDocuments(supabase, botToken, cqChatId);
       } else if (cq.data === "support") {
-        await sendTelegramMessage(botToken, cqChatId, `По любым вопросам — напишите на ${CONTACT_EMAIL}`);
+        await sendTelegramMessage(botToken, cqChatId, `По любым вопросам — Telegram ${CONTACT_TELEGRAM} или e-mail ${CONTACT_EMAIL}`);
       }
     }
     await answerCallbackQuery(botToken, cq.id);
@@ -111,16 +133,7 @@ Deno.serve(async (req) => {
   // before the person has ever opened the app (no profile lookup needed),
   // and needs the live `plans` row for the numbers quoted inside.
   if (command === "/info") {
-    const { data: plans } = await supabase
-      .from("plans")
-      .select("id, price_rub, storage_limit_bytes, ai_calls_limit_per_month, secrets_limit")
-      .order("price_rub", { ascending: true });
-    for (const chunk of chunkSections(buildPrivacySections(plans ?? []))) {
-      await reply(chunk);
-    }
-    for (const chunk of chunkSections(buildTermsSections(plans ?? []))) {
-      await reply(chunk);
-    }
+    await sendLegalDocuments(supabase, botToken, chatId);
     return json({ ok: true });
   }
 
@@ -166,7 +179,7 @@ Deno.serve(async (req) => {
           [{ text: "🚀 Открыть приложение", url: appLink }],
           [
             { text: "ℹ️ Инфо", callback_data: "info" },
-            { text: "🆘 Поддержка", callback_data: "support" },
+            { text: "🆘 Поддержка", url: `https://t.me/${CONTACT_TELEGRAM.replace("@", "")}` },
           ],
           referralLink
             ? [

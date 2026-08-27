@@ -8,7 +8,8 @@ import { listPlans } from "../lib/api";
 import { formatBytes } from "../lib/typeMeta";
 
 const EFFECTIVE_DATE = "25 августа 2026";
-const CONTACT_EMAIL = "fillat0ff321@gmail.com";
+const CONTACT_EMAIL = "fillatov.dev@mail.ru";
+const CONTACT_TELEGRAM = "@nchtsupport";
 
 type DocTab = "privacy" | "terms";
 
@@ -33,7 +34,8 @@ export function InfoScreen() {
         <Card className="space-y-1.5 p-4">
           <SectionLabel>Контакты</SectionLabel>
           <p className="text-sm leading-relaxed text-slate">
-            По вопросам конфиденциальности, условий использования или удаления аккаунта —{" "}
+            По вопросам конфиденциальности, условий использования или удаления аккаунта — Telegram{" "}
+            <span className="text-bone">{CONTACT_TELEGRAM}</span> или e-mail{" "}
             <span className="text-bone">{CONTACT_EMAIL}</span>.
           </p>
         </Card>

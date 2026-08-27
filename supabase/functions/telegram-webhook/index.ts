@@ -20,6 +20,29 @@ import { getEffectiveLimits } from "./_shared/planLimits.ts";
 // it's a constant here rather than duplicated as another env var.
 const MINIAPP_SHORTNAME = "ncht";
 
+// How long the "✅ Сохранено" confirmation stays visible before it deletes
+// itself — long enough to read the title, short enough not to clutter the
+// chat once it's served its purpose (same idea as auto-deleting the voice
+// note it may have replaced).
+const CONFIRMATION_TTL_MS = 6000;
+
+// Deletes a message after a delay, without making the webhook wait for it —
+// scheduled via EdgeRuntime.waitUntil so it keeps running after the
+// response has already gone back to Telegram. Falls back to a bare
+// fire-and-forget promise if that global isn't available.
+function scheduleMessageDeletion(botToken: string, chatId: number, messageId: number, delayMs: number): void {
+  const task = new Promise<void>((resolve) => setTimeout(resolve, delayMs)).then(() =>
+    deleteTelegramMessage(botToken, chatId, messageId)
+  );
+  // deno-lint-ignore no-explicit-any
+  const runtime = (globalThis as any).EdgeRuntime;
+  if (runtime?.waitUntil) {
+    runtime.waitUntil(task);
+  } else {
+    task.catch(() => {});
+  }
+}
+
 // Sends exactly two file attachments — Privacy Policy and Terms of Use —
 // never chained chat messages. Shared between /info and the "Инфо" button
 // under the /start post so both paths stay identical.
@@ -437,9 +460,12 @@ Deno.serve(async (req) => {
 
   if (saved) {
     await maybeActivateReferral(supabase, profile.id);
-    await reply(`✅ Сохранено: ${saved.title ?? "без названия"}`);
+    const confirmation = await reply(`✅ Сохранено: ${saved.title ?? "без названия"}`);
     if (voiceMessageId) {
       await deleteTelegramMessage(botToken, chatId, voiceMessageId);
+    }
+    if (confirmation.messageId) {
+      scheduleMessageDeletion(botToken, chatId, confirmation.messageId, CONFIRMATION_TTL_MS);
     }
   } else {
     await reply("Не удалось разобрать — попробуйте ещё раз или через приложение.");

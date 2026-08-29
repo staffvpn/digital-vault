@@ -148,4 +148,13 @@ export interface ClassifyResult {
   remind_notify_1?: string | null;
   remind_notify_2?: string | null;
   ocr_text?: string | null;
+  // Only present when type is "possible_credential" and the source was an
+  // image the AI recognized as a login/registration screen — what it read
+  // off the screen, for the client to file straight into the Vault without
+  // re-deriving anything. cred_password is omitted/null if the field was
+  // masked on screen (dots/asterisks), in which case there's nothing to
+  // auto-save and the user is asked to do it manually instead.
+  cred_site?: string | null;
+  cred_login?: string | null;
+  cred_password?: string | null;
 }

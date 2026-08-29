@@ -95,22 +95,53 @@ Deno.serve(async (req) => {
   const ocrEnabled = body.kind === "image" && Boolean(limits?.ocrEnabled);
   const aiResult = await callClassifyModel(aiInput, { includeOcr: Boolean(ocrEnabled) });
 
-  // 3. Safety net: if the AI/OCR pass surfaced credential-shaped text
-  // anywhere in its own output, still route to the Vault confirmation flow
-  // instead of saving it as a normal item.
-  const combinedText = [aiResult?.title, rawText].filter(Boolean).join(" ");
+  // The call already happened (or didn't) — count it now, before any of the
+  // branches below decide what to do with the result. A blocked/rerouted
+  // result still used up the month's allowance the same as a saved one;
+  // only a failed call (aiResult === null) is free.
+  if (aiResult) {
+    await supabase.from("usage_events").insert({ user_id: session.userId, kind: "ai_call" });
+    await supabase
+      .from("profiles")
+      .update({ ai_calls_used: aiCallsUsed + 1 })
+      .eq("id", session.userId);
+  }
+
+  // 3. The model flagged this image as a login/registration/password
+  // screen — reroute straight to the Vault confirmation flow instead of
+  // ever letting a visible password reach the (unencrypted) items table.
+  // The client fills the secret's fields from what the model read off the
+  // screen; it never re-derives them from anything else.
+  if (aiResult?.type === "credential_screenshot") {
+    return json({
+      result: {
+        type: "possible_credential",
+        category: null,
+        tags: [],
+        confidence: 1,
+        title: null,
+        cred_site: aiResult.site ?? null,
+        cred_login: aiResult.login ?? null,
+        cred_password: aiResult.password ?? null,
+      },
+      source: "ai_credential_screen",
+    });
+  }
+
+  // 4. Safety net: if the AI/OCR pass surfaced credential-shaped text
+  // anywhere in its own output — title, description or OCR'd text — still
+  // route to the Vault confirmation flow instead of saving it as a normal
+  // (unencrypted) item. The client has no extracted fields in this case,
+  // so it asks the user to save manually rather than guessing.
+  const combinedText = [aiResult?.title, aiResult?.description, aiResult?.ocr_text, rawText]
+    .filter(Boolean)
+    .join(" ");
   if (looksLikeCredential(combinedText)) {
     return json({
       result: { type: "possible_credential", category: null, tags: [], confidence: 1, title: null },
       source: "heuristic_post_ai",
     });
   }
-
-  await supabase.from("usage_events").insert({ user_id: session.userId, kind: "ai_call" });
-  await supabase
-    .from("profiles")
-    .update({ ai_calls_used: aiCallsUsed + 1 })
-    .eq("id", session.userId);
 
   if (!aiResult) {
     return json({

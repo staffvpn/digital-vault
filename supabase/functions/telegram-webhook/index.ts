@@ -14,6 +14,8 @@ import {
 import { maybeActivateReferral } from "./_shared/referralActivation.ts";
 import { buildPrivacySections, buildTermsSections, joinDocument, CONTACT_EMAIL, CONTACT_TELEGRAM } from "./_shared/legalText.ts";
 import { getEffectiveLimits } from "./_shared/planLimits.ts";
+import { encryptSecret } from "./_shared/crypto.ts";
+import { guessCredentialFields, guessSecretName } from "./_shared/credentialGuess.ts";
 
 // Registered once with @BotFather via /newapp — this is fixed registration
 // metadata, not a secret, and there's no Bot API call that returns it, so
@@ -68,21 +70,81 @@ async function sendLegalDocuments(supabase: any, botToken: string, chatId: numbe
   );
 }
 
+// Every path that can end a message-handling turn funnels into one of
+// these — the single place at the bottom of the handler decides what to
+// reply and whether to clean up the original message, instead of each
+// branch sending its own reply and risking a double message.
+type SaveOutcome =
+  | { status: "saved"; title: string | null }
+  | { status: "credential_saved"; name: string }
+  | { status: "duplicate"; title: string | null }
+  | { status: "credential_masked" }
+  | { status: "secrets_limit_reached" }
+  | { status: "blocked" }
+  | { status: "failed" };
+
+// The one place that actually writes to the Vault — used both by pasted/
+// forwarded credential text and by a recognized login-screen screenshot.
+// Never called with anything derived from the AI's own wording for text;
+// for images, the fields are exactly what the vision call read off the
+// screen (see the credential_screenshot branch in _shared/classify.ts).
+// deno-lint-ignore no-explicit-any
+async function saveSecretToVault(
+  supabase: any,
+  // deno-lint-ignore no-explicit-any
+  profile: any,
+  fields: { name: string; username: string | null; password: string },
+): Promise<"saved" | "limit_reached" | "not_configured"> {
+  const vaultKey = Deno.env.get("VAULT_ENCRYPTION_KEY");
+  if (!vaultKey) return "not_configured";
+  const limits = await getEffectiveLimits(supabase, profile);
+  const effectiveLimit = limits.secretsLimit + (profile.secrets_bonus ?? 0);
+  if ((profile.secrets_count ?? 0) >= effectiveLimit) return "limit_reached";
+  const encrypted = await encryptSecret(fields.password, vaultKey);
+  await supabase.from("secrets").insert({
+    user_id: profile.id,
+    name: fields.name,
+    username: fields.username,
+    password_encrypted: encrypted,
+  });
+  await supabase
+    .from("profiles")
+    .update({ secrets_count: (profile.secrets_count ?? 0) + 1 })
+    .eq("id", profile.id);
+  return "saved";
+}
+
+async function saveCredentialTextToVault(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  // deno-lint-ignore no-explicit-any
+  profile: any,
+  trimmed: string,
+): Promise<SaveOutcome> {
+  const guess = guessCredentialFields(trimmed);
+  const name = guessSecretName(trimmed);
+  const password = guess.password ?? trimmed.trim();
+  const result = await saveSecretToVault(supabase, profile, { name, username: guess.username ?? null, password });
+  if (result === "saved") return { status: "credential_saved", name };
+  if (result === "limit_reached") return { status: "secrets_limit_reached" };
+  return { status: "blocked" };
+}
+
 // The classify-and-save pipeline shared by pasted/forwarded text and by
-// voice messages once transcribed to text — one piece of text in, one saved
-// item (note, reminder, link…) out. Handles the credential guard, the
-// duplicate-URL check and the actual AI call + insert.
+// voice messages once transcribed to text — one piece of text in, one
+// outcome out. Handles the credential guard (now actually saving to the
+// Vault, same as the Mini App, instead of just telling the user to do it
+// themselves), the duplicate-URL check and the actual AI call + insert.
 // deno-lint-ignore no-explicit-any
 async function classifyAndSaveText(
   supabase: any,
-  profileId: string,
+  // deno-lint-ignore no-explicit-any
+  profile: any,
   aiCallsUsed: number,
   trimmed: string,
-  reply: (text: string) => Promise<unknown>,
-): Promise<{ id: string; title: string | null } | null> {
+): Promise<SaveOutcome> {
   if (looksLikeCredential(trimmed)) {
-    await reply("Похоже на пароль — такое, пожалуйста, сохраняйте прямо в приложении, в Сейф, а не пересылкой сюда.");
-    return null;
+    return await saveCredentialTextToVault(supabase, profile, trimmed);
   }
 
   let isUrl = false;
@@ -97,12 +159,11 @@ async function classifyAndSaveText(
     const { data: existing } = await supabase
       .from("items")
       .select("id, title")
-      .eq("user_id", profileId)
+      .eq("user_id", profile.id)
       .eq("source_url", trimmed)
       .maybeSingle();
     if (existing) {
-      await reply(`Уже сохранено: ${existing.title ?? trimmed}`);
-      return null;
+      return { status: "duplicate", title: existing.title ?? trimmed };
     }
   }
 
@@ -113,18 +174,19 @@ async function classifyAndSaveText(
   const aiResult = await callClassifyModel(aiInput);
 
   if (aiResult && looksLikeCredential(aiResult.title ?? "")) {
-    await reply("Похоже на пароль — такое, пожалуйста, сохраняйте прямо в приложении, в Сейф, а не пересылкой сюда.");
-    return null;
+    // Still never derive the secret from anything the AI wrote — re-extract
+    // from the original, untouched text, exactly like the branch above.
+    return await saveCredentialTextToVault(supabase, profile, trimmed);
   }
-  if (!aiResult) return null;
+  if (!aiResult) return { status: "failed" };
 
   attachReminderTimestamps(aiResult);
-  await supabase.from("usage_events").insert({ user_id: profileId, kind: "ai_call" });
-  await supabase.from("profiles").update({ ai_calls_used: aiCallsUsed + 1 }).eq("id", profileId);
+  await supabase.from("usage_events").insert({ user_id: profile.id, kind: "ai_call" });
+  await supabase.from("profiles").update({ ai_calls_used: aiCallsUsed + 1 }).eq("id", profile.id);
   const { data: item } = await supabase
     .from("items")
     .insert({
-      user_id: profileId,
+      user_id: profile.id,
       type: aiResult.type ?? (isUrl ? "link" : "text"),
       category: aiResult.category ?? null,
       subcategory: aiResult.subcategory ?? null,
@@ -144,7 +206,8 @@ async function classifyAndSaveText(
     .select("id, title")
     .single();
 
-  return item ?? null;
+  if (!item) return { status: "failed" };
+  return { status: "saved", title: item.title ?? null };
 }
 
 // Forward (or just type) anything straight to the bot in its private chat —
@@ -242,7 +305,9 @@ Deno.serve(async (req) => {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, plan, custom_plan, ai_calls_used, ai_calls_period_start, storage_used_bytes, referral_code")
+    .select(
+      "id, plan, custom_plan, ai_calls_used, ai_calls_period_start, storage_used_bytes, referral_code, secrets_count, secrets_bonus",
+    )
     .eq("telegram_id", fromId)
     .maybeSingle();
 
@@ -270,7 +335,7 @@ Deno.serve(async (req) => {
       "• ИИ сам определяет тип и категорию, находит дубли",
       "• OCR по скриншотам и пересказ статей за 30 секунд (Pro/Premium)",
       "• Голосовые заметки и напоминания точно ко времени",
-      "• Пароли и ключи — отдельно, зашифрованно, никогда не через ИИ",
+      "• Пароли и ключи — отдельно, зашифрованно, даже со скриншота",
       "",
       "Free — бесплатно, 50 AI-сохранений в месяц и 5 паролей в Сейфе. Pro — 249 ₽/мес. Premium — 449 ₽/мес. Можно оплатить звёздами Telegram.",
       "",
@@ -356,7 +421,7 @@ Deno.serve(async (req) => {
     return json({ ok: true });
   }
 
-  let saved: { id: string; title: string | null } | null = null;
+  let outcome: SaveOutcome = { status: "failed" };
   // Only set once a voice note has actually been turned into a saved item —
   // that's the trigger to delete the original recording from the chat.
   let voiceMessageId: number | null = null;
@@ -371,60 +436,93 @@ Deno.serve(async (req) => {
     }
     const fileBytes = await fetch(`https://api.telegram.org/file/bot${botToken}/${filePath}`).then((r) => r.arrayBuffer());
 
-    if (profile.storage_used_bytes + fileBytes.byteLength > limits.storageLimitBytes) {
-      await reply("Не хватает места в хранилище на вашем тарифе — освободите место или перейдите на тариф побольше в приложении.");
-      return json({ ok: true });
-    }
-
     const base64 = btoa(String.fromCharCode(...new Uint8Array(fileBytes)));
     const ocrEnabled = limits.ocrEnabled;
     const aiResult = await callClassifyModel({ imageBase64: base64, mimeType: "image/jpeg" }, { includeOcr: ocrEnabled });
+
+    // The vision call already happened either way — count it once, before
+    // deciding what to do with the result.
     if (aiResult) {
-      // Persist the actual bytes to Storage — the AI call above only ever
-      // saw a transient in-memory copy for classification, it was never
-      // kept anywhere on its own.
-      const storagePath = `${profile.id}/${crypto.randomUUID()}-telegram.jpg`;
-      const { error: uploadError } = await supabase.storage
-        .from("vault-files")
-        .upload(storagePath, fileBytes, { contentType: "image/jpeg" });
-
-      if (uploadError) {
-        await reply("Не удалось сохранить изображение 🙁");
-        return json({ ok: true });
-      }
-
       await supabase.from("usage_events").insert({ user_id: profile.id, kind: "ai_call" });
       await supabase.from("profiles").update({ ai_calls_used: aiCallsUsed + 1 }).eq("id", profile.id);
-      const { data: item } = await supabase
-        .from("items")
-        .insert({
-          user_id: profile.id,
-          type: "image",
-          category: aiResult.category ?? null,
-          subcategory: aiResult.subcategory ?? null,
-          title: aiResult.title ?? "Изображение",
-          description: aiResult.description ?? null,
-          ocr_text: aiResult.ocr_text ?? null,
-          status: "saved",
-          confidence: aiResult.confidence ?? null,
-        })
-        .select("id, title")
-        .single();
+    }
 
-      if (item) {
-        await supabase.from("files").insert({
-          user_id: profile.id,
-          item_id: item.id,
-          storage_path: storagePath,
-          mime_type: "image/jpeg",
-          size_bytes: fileBytes.byteLength,
+    if (aiResult?.type === "credential_screenshot") {
+      // A login/registration screen — the image bytes are discarded right
+      // here, never uploaded to Storage or turned into an item. Only the
+      // fields the model actually read off the screen go anywhere, and
+      // only into the encrypted Vault.
+      const fallbackName = `Скриншот · ${new Date().toLocaleDateString("ru-RU")}`;
+      if (aiResult.password) {
+        const result = await saveSecretToVault(supabase, profile, {
+          name: aiResult.site || fallbackName,
+          username: aiResult.login ?? null,
+          password: aiResult.password,
         });
-        await supabase
-          .from("profiles")
-          .update({ storage_used_bytes: profile.storage_used_bytes + fileBytes.byteLength })
-          .eq("id", profile.id);
+        outcome = result === "saved"
+          ? { status: "credential_saved", name: aiResult.site || fallbackName }
+          : result === "limit_reached"
+          ? { status: "secrets_limit_reached" }
+          : { status: "blocked" };
+      } else {
+        outcome = { status: "credential_masked" };
       }
-      saved = item;
+    } else if (aiResult) {
+      // Safety net: even when the model didn't flag a dedicated login
+      // screen, if anything it wrote — title, description, OCR'd text —
+      // still looks credential-shaped, don't let it become a normal,
+      // unencrypted item.
+      const combinedText = [aiResult.title, aiResult.description, aiResult.ocr_text].filter(Boolean).join(" ");
+      if (looksLikeCredential(combinedText)) {
+        outcome = { status: "blocked" };
+      } else if (profile.storage_used_bytes + fileBytes.byteLength > limits.storageLimitBytes) {
+        await reply("Не хватает места в хранилище на вашем тарифе — освободите место или перейдите на тариф побольше в приложении.");
+        return json({ ok: true });
+      } else {
+        // Persist the actual bytes to Storage — the AI call above only ever
+        // saw a transient in-memory copy for classification, it was never
+        // kept anywhere on its own.
+        const storagePath = `${profile.id}/${crypto.randomUUID()}-telegram.jpg`;
+        const { error: uploadError } = await supabase.storage
+          .from("vault-files")
+          .upload(storagePath, fileBytes, { contentType: "image/jpeg" });
+
+        if (uploadError) {
+          await reply("Не удалось сохранить изображение 🙁");
+          return json({ ok: true });
+        }
+
+        const { data: item } = await supabase
+          .from("items")
+          .insert({
+            user_id: profile.id,
+            type: "image",
+            category: aiResult.category ?? null,
+            subcategory: aiResult.subcategory ?? null,
+            title: aiResult.title ?? "Изображение",
+            description: aiResult.description ?? null,
+            ocr_text: aiResult.ocr_text ?? null,
+            status: "saved",
+            confidence: aiResult.confidence ?? null,
+          })
+          .select("id, title")
+          .single();
+
+        if (item) {
+          await supabase.from("files").insert({
+            user_id: profile.id,
+            item_id: item.id,
+            storage_path: storagePath,
+            mime_type: "image/jpeg",
+            size_bytes: fileBytes.byteLength,
+          });
+          await supabase
+            .from("profiles")
+            .update({ storage_used_bytes: profile.storage_used_bytes + fileBytes.byteLength })
+            .eq("id", profile.id);
+          outcome = { status: "saved", title: item.title ?? null };
+        }
+      }
     }
   } else if (message.voice) {
     // Voice note → bytes → Whisper → same classify-and-save pipeline as
@@ -452,21 +550,32 @@ Deno.serve(async (req) => {
     await supabase.from("usage_events").insert({ user_id: profile.id, kind: "ai_call" });
     await supabase.from("profiles").update({ ai_calls_used: aiCallsUsed + 1 }).eq("id", profile.id);
 
-    saved = await classifyAndSaveText(supabase, profile.id, aiCallsUsed + 1, transcribed, reply);
-    if (saved) voiceMessageId = message.message_id;
+    outcome = await classifyAndSaveText(supabase, profile, aiCallsUsed + 1, transcribed);
+    if (outcome.status === "saved" || outcome.status === "credential_saved") voiceMessageId = message.message_id;
   } else if (text?.trim()) {
-    saved = await classifyAndSaveText(supabase, profile.id, aiCallsUsed, text.trim(), reply);
+    outcome = await classifyAndSaveText(supabase, profile, aiCallsUsed, text.trim());
   }
 
-  if (saved) {
+  if (outcome.status === "saved" || outcome.status === "credential_saved") {
     await maybeActivateReferral(supabase, profile.id);
-    const confirmation = await reply(`✅ Сохранено: ${saved.title ?? "без названия"}`);
+    const confirmationText = outcome.status === "saved"
+      ? `✅ Сохранено: ${outcome.title ?? "без названия"}`
+      : `🔐 Сохранено в Сейф: ${outcome.name}`;
+    const confirmation = await reply(confirmationText);
     if (voiceMessageId) {
       await deleteTelegramMessage(botToken, chatId, voiceMessageId);
     }
     if (confirmation.messageId) {
       scheduleMessageDeletion(botToken, chatId, confirmation.messageId, CONFIRMATION_TTL_MS);
     }
+  } else if (outcome.status === "duplicate") {
+    await reply(`Уже сохранено: ${outcome.title ?? ""}`.trim());
+  } else if (outcome.status === "credential_masked") {
+    await reply("Экран входа найден, но пароль скрыт на скриншоте — сохраните вручную в приложении, в Сейф.");
+  } else if (outcome.status === "secrets_limit_reached") {
+    await reply("Похоже на пароль, но лимит записей в Сейфе исчерпан — освободите место или перейдите на тариф побольше в приложении.");
+  } else if (outcome.status === "blocked") {
+    await reply("Похоже на пароль — такое, пожалуйста, сохраняйте прямо в приложении, в Сейф, а не пересылкой сюда.");
   } else {
     await reply("Не удалось разобрать — попробуйте ещё раз или через приложение.");
   }

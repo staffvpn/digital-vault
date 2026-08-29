@@ -96,6 +96,22 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
     [flashSaved, push],
   );
 
+  // Same destination as autoSaveSecret, but the fields already come filled
+  // in — from the AI reading a login/registration screenshot — instead of
+  // being guessed locally from raw pasted text.
+  const autoSaveSecretFromFields = useCallback(
+    async (fields: { name: string; username?: string; password: string }) => {
+      try {
+        await createSecret(fields);
+        flashSaved({ title: fields.name, sub: "В Сейфе · распознано на скриншоте", tone: "secret" });
+      } catch {
+        push("Не удалось сохранить в Сейф", "error");
+        setStage("idle");
+      }
+    },
+    [flashSaved, push],
+  );
+
   const autoSaveItem = useCallback(
     async (draft: Draft, result: ClassifyResult, linkMeta: LinkMeta | null) => {
       try {
@@ -166,6 +182,23 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
         }
         if (result.type === "possible_credential") {
           hapticNotify("warning");
+          if (d.kind === "image") {
+            // The AI recognized this as a login/registration screen. If it
+            // could read the password (not masked by dots), file it straight
+            // into the Vault — the image itself is never uploaded or kept.
+            // If the password was hidden, there's nothing to auto-save.
+            if (result.cred_password) {
+              await autoSaveSecretFromFields({
+                name: result.cred_site || `Скриншот · ${new Date().toLocaleDateString("ru-RU")}`,
+                username: result.cred_login || undefined,
+                password: result.cred_password,
+              });
+            } else {
+              push("Экран входа найден, но пароль скрыт на скриншоте — сохраните вручную в Сейфе", "default");
+              setStage("idle");
+            }
+            return;
+          }
           await autoSaveSecret(d.raw);
           return;
         }
@@ -175,7 +208,7 @@ export function CaptureZone({ onSaved }: { onSaved: () => void }) {
         setStage("idle");
       }
     },
-    [autoSaveSecret, autoSaveItem, flashSaved, push],
+    [autoSaveSecret, autoSaveSecretFromFields, autoSaveItem, flashSaved, push],
   );
 
   const handleFiles = useCallback(

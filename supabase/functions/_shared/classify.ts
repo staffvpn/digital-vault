@@ -4,7 +4,27 @@
 // same reminder-timestamp math either way — only the auth/plumbing differs
 // between the two callers.
 
-function buildTaxonomy(nowMsk: string, includeOcr: boolean): string {
+function buildTaxonomy(nowMsk: string, includeOcr: boolean, isImage: boolean): string {
+  // Checked first and takes priority over every rule below — a login,
+  // registration or password-recovery screen must never fall through to
+  // the normal "image" classification, where any visible password would
+  // end up as plain, unencrypted description/OCR text in the open items
+  // table. This costs the same one vision call every image already makes;
+  // it isn't gated behind the paid OCR toggle, since it's a safety net,
+  // not a search perk.
+  const credentialRule = isImage
+    ? `\nЕСЛИ это скриншот формы входа, регистрации, восстановления или смены пароля,
+карточки пароля из другого менеджера паролей, или любого экрана, где виден
+логин/почта/телефон и/или пароль пользователя — ПРОИГНОРИРУЙ все правила ниже
+и ответь СТРОГО в этом формате, больше ничего не добавляя:
+{"type":"credential_screenshot","site":"...","login":"...","password":"..."}
+"site" — название сайта или сервиса (по адресной строке, логотипу, заголовку
+страницы или названию приложения). "login" — логин, почта или телефон, если
+виден на экране, иначе null. "password" — сам пароль ДОСЛОВНО, ТОЛЬКО если он
+показан обычным текстом (не точками и не звёздочками); если поле пароля
+замаскировано — верни null, не пытайся угадать.\n`
+    : "";
+
   const ocrRule = includeOcr
     ? `\nЕсли на картинке есть текст — распознай его и продублируй ДОСЛОВНО в поле
 "ocr_text" (или null, если текста нет). Это отдельное поле от "description":
@@ -14,7 +34,7 @@ function buildTaxonomy(nowMsk: string, includeOcr: boolean): string {
   const ocrSchema = includeOcr ? `,"ocr_text":null` : "";
 
   return `
-Возможные type: link, text, image, file, note, reminder, service, bookmark, design_reference.
+${credentialRule}Возможные type: link, text, image, file, note, reminder, service, bookmark, design_reference.
 (Типы movie/series/tags не используются — не добавляй их.)
 
 Правила:
@@ -94,7 +114,7 @@ export async function callClassifyModel(
   const apiKey = Deno.env.get("POLZA_API_KEY");
   if (!apiKey) return null;
 
-  const taxonomy = buildTaxonomy(nowInMoscow(), Boolean(opts.includeOcr));
+  const taxonomy = buildTaxonomy(nowInMoscow(), Boolean(opts.includeOcr), Boolean(input.imageBase64 && input.mimeType));
   // deno-lint-ignore no-explicit-any
   const content: any[] = [];
   if (input.imageBase64 && input.mimeType) {

@@ -199,3 +199,12 @@ export async function createStarsInvoice(
     body: target,
   });
 }
+
+export async function createPlategaInvoice(
+  target: { plan: "pro" | "pro_plus" } | { custom: import("./customPlanPricing").CustomPlanSelection },
+) {
+  return call<{ paymentUrl: string; paymentId: string; amountRub: number }>("create-platega-invoice", {
+    method: "POST",
+    body: target,
+  });
+}

@@ -1,109 +1,114 @@
 import { handleOptions, json } from "./_shared/cors.ts";
 import { supabaseAdmin } from "./_shared/supabaseAdmin.ts";
 
-// STUB — not yet wired to a live payment provider. This exists so the
-// plan-upgrade and referral-qualification logic has one real entry point to
-// call once Platega.io (or any provider) is actually connected; nothing in
-// the app can reach real money today.
+// Platega.io's real callback ("Callback об изменении статуса транзакции").
+// Their auth model isn't a signature — they echo back the same
+// X-MerchantId/X-Secret pair we send when creating a transaction, so this
+// checks the request against the same two Platega credentials
+// create-platega-invoice already uses, not a separate shared secret.
 //
-// Fails closed by default: PAYMENT_WEBHOOK_SECRET must be set as an Edge
-// Function secret, and the caller must echo it back via X-Webhook-Secret.
-// Until that's configured, every request here is rejected with 401.
-//
-// TODO before going live: replace/augment this shared-secret check with
-// verification of the provider's own webhook signature per their docs, and
-// map their real payload fields onto the shape read below.
+// Payload: { id (their transaction ID), amount, currency,
+// status: "CONFIRMED" | "CANCELED" | "CHARGEBACKED", paymentMethod }.
+// We never trust their `payload` echo for the lookup — provider_ref (set
+// to their transaction ID at creation time) is the only reliable key.
 Deno.serve(async (req) => {
   const opt = handleOptions(req);
   if (opt) return opt;
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  const expectedSecret = Deno.env.get("PAYMENT_WEBHOOK_SECRET");
-  const providedSecret = req.headers.get("x-webhook-secret");
-  if (!expectedSecret || providedSecret !== expectedSecret) {
+  const merchantId = Deno.env.get("PLATEGA_MERCHANT_ID");
+  const secret = Deno.env.get("PLATEGA_SECRET");
+  if (!merchantId || !secret) return json({ error: "server_not_configured" }, 500);
+  if (req.headers.get("x-merchantid") !== merchantId || req.headers.get("x-secret") !== secret) {
     return json({ error: "unauthorized" }, 401);
   }
 
   let body: {
-    event?: "succeeded" | "failed" | "refunded";
-    userId?: string;
-    plan?: "pro" | "pro_plus";
-    amountRub?: number;
-    providerRef?: string;
+    id?: string;
+    amount?: number;
+    currency?: string;
+    status?: "CONFIRMED" | "CANCELED" | "CHARGEBACKED";
+    paymentMethod?: number;
   };
   try {
     body = await req.json();
   } catch {
     return json({ error: "invalid_json" }, 400);
   }
-  if (!body.event || !body.userId || !body.providerRef) {
-    return json({ error: "missing_fields" }, 400);
-  }
+  if (!body.id || !body.status) return json({ error: "missing_fields" }, 400);
 
   const supabase = supabaseAdmin();
 
-  // Idempotency: providers retry webhook delivery. A providerRef already in
-  // a terminal state means this event was already applied — never double-
-  // charge a plan change or a referral reward off a retried delivery.
-  const { data: existing } = await supabase
+  const { data: payment } = await supabase
     .from("payments")
-    .select("id, status")
-    .eq("provider_ref", body.providerRef)
+    .select("id, status, user_id, plan, custom_plan")
+    .eq("provider_ref", body.id)
     .maybeSingle();
-  if (existing && (existing.status === "succeeded" || existing.status === "refunded")) {
+  if (!payment) return json({ error: "unknown_payment" }, 404);
+
+  // Idempotency: Platega retries up to 3 times over ~15 minutes if it
+  // doesn't get a 200 back — a payment already in a terminal state means
+  // this exact event already ran, never double-grant or double-reverse.
+  if (payment.status === "succeeded" || payment.status === "refunded" || payment.status === "failed") {
     return json({ ok: true, alreadyProcessed: true });
   }
 
-  if (body.event === "succeeded") {
-    if (!body.plan || !body.amountRub) return json({ error: "missing_fields" }, 400);
+  if (body.status === "CONFIRMED") {
+    await supabase.from("payments").update({ status: "succeeded" }).eq("id", payment.id);
 
-    if (existing?.id) {
-      await supabase.from("payments").update({ status: "succeeded" }).eq("id", existing.id);
+    if (payment.plan) {
+      await supabase.from("profiles").update({ plan: payment.plan }).eq("id", payment.user_id);
+      // Referral rewards only ever apply to Pro/Premium purchases — a
+      // custom-plan purchase deliberately never qualifies or consumes a
+      // referral, same invariant as the Stars flow.
+      await supabase.rpc("fn_qualify_referral", { p_referred_id: payment.user_id, p_plan: payment.plan });
+      await supabase.rpc("fn_consume_referral_discount", { p_user_id: payment.user_id });
+      await notifyUser(
+        supabase,
+        payment.user_id,
+        `✅ Оплата получена — тариф обновлён на ${payment.plan === "pro" ? "Pro" : "Premium"}. Спасибо! ⭐`,
+      );
+    } else if (payment.custom_plan) {
+      await supabase.from("profiles").update({ custom_plan: payment.custom_plan }).eq("id", payment.user_id);
+      await notifyUser(supabase, payment.user_id, "✅ Оплата получена — ваш «Свой тариф» подключён. Спасибо! ⭐");
     } else {
-      await supabase.from("payments").insert({
-        user_id: body.userId,
-        plan: body.plan,
-        amount_rub: body.amountRub,
-        status: "succeeded",
-        provider_ref: body.providerRef,
-      });
+      await notifyUser(supabase, payment.user_id, "✅ Оплата получена, спасибо!");
     }
-
-    await supabase.from("profiles").update({ plan: body.plan }).eq("id", body.userId);
-    // Two separate perks, two separate people: the referrer's Vault-slot
-    // reward (fn_qualify_referral) and the invited person's own one-time
-    // 10% discount (fn_consume_referral_discount) — never on the custom
-    // plan, which doesn't go through this pro/pro_plus enum at all.
-    await supabase.rpc("fn_qualify_referral", { p_referred_id: body.userId, p_plan: body.plan });
-    await supabase.rpc("fn_consume_referral_discount", { p_user_id: body.userId });
     return json({ ok: true });
   }
 
-  if (body.event === "refunded") {
-    const { data: payment } = await supabase
-      .from("payments")
-      .select("id, user_id, plan")
-      .eq("provider_ref", body.providerRef)
-      .maybeSingle();
-    if (!payment) return json({ error: "unknown_payment" }, 404);
+  if (body.status === "CANCELED") {
+    await supabase.from("payments").update({ status: "failed" }).eq("id", payment.id);
+    return json({ ok: true });
+  }
 
+  if (body.status === "CHARGEBACKED") {
     await supabase.from("payments").update({ status: "refunded" }).eq("id", payment.id);
-
-    const { data: profile } = await supabase.from("profiles").select("plan").eq("id", payment.user_id).single();
-    if (profile?.plan === payment.plan) {
-      await supabase.from("profiles").update({ plan: "free" }).eq("id", payment.user_id);
-    }
-
-    await supabase.rpc("fn_reverse_referral", { p_referred_id: payment.user_id });
-    return json({ ok: true });
-  }
-
-  if (body.event === "failed") {
-    if (existing?.id) {
-      await supabase.from("payments").update({ status: "failed" }).eq("id", existing.id);
+    if (payment.plan) {
+      const { data: profile } = await supabase.from("profiles").select("plan").eq("id", payment.user_id).single();
+      if (profile?.plan === payment.plan) {
+        await supabase.from("profiles").update({ plan: "free" }).eq("id", payment.user_id);
+      }
+      await supabase.rpc("fn_reverse_referral", { p_referred_id: payment.user_id });
     }
     return json({ ok: true });
   }
 
-  return json({ error: "unknown_event" }, 400);
+  return json({ error: "unknown_status" }, 400);
 });
+
+// A card/SBP payment never goes through the bot chat on its own — unlike
+// Stars, there's no successful_payment update to hang a confirmation off
+// of — so this webhook sends the confirmation itself.
+// deno-lint-ignore no-explicit-any
+async function notifyUser(supabase: any, userId: string, text: string): Promise<void> {
+  const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
+  if (!botToken) return;
+  const { data: profile } = await supabase.from("profiles").select("telegram_id").eq("id", userId).maybeSingle();
+  if (!profile?.telegram_id) return;
+  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ chat_id: profile.telegram_id, text }),
+  }).catch(() => {});
+}

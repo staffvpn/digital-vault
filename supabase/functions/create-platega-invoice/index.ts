@@ -83,30 +83,43 @@ Deno.serve(async (req) => {
   // hosted payment page closes — a t.me link tapped inside Telegram's own
   // in-app browser relaunches the app natively, the same trick the
   // referral and collection-share links already rely on.
-  const me = await fetch(`https://api.telegram.org/bot${botToken}/getMe`).then((r) => r.json()).catch(() => null);
+  // A short, explicit timeout here matters: without one, a slow/hanging
+  // Telegram response leaves the whole request stuck with no HTTP
+  // response ever sent back — which reads to the client as a silent
+  // "не удалось создать счёт" with nothing useful in the logs to diagnose.
+  const me = await fetch(`https://api.telegram.org/bot${botToken}/getMe`, { signal: AbortSignal.timeout(6000) })
+    .then((r) => r.json())
+    .catch(() => null);
   const botUsername: string | undefined = me?.result?.username;
   const returnUrl = botUsername ? `https://t.me/${botUsername}/ncht` : "https://t.me";
 
-  const res = await fetch("https://app.platega.io/v2/transaction/process", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "X-MerchantId": merchantId,
-      "X-Secret": secret,
-    },
-    body: JSON.stringify({
-      paymentDetails: { amount: amountRub, currency: "RUB" },
-      description,
-      return: returnUrl,
-      failedUrl: returnUrl,
-      payload: payment.id,
-      metadata: { userId: session.userId },
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch("https://app.platega.io/v2/transaction/process", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "X-MerchantId": merchantId,
+        "X-Secret": secret,
+      },
+      body: JSON.stringify({
+        paymentDetails: { amount: amountRub, currency: "RUB" },
+        description,
+        return: returnUrl,
+        failedUrl: returnUrl,
+        payload: payment.id,
+        metadata: { userId: session.userId },
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (err) {
+    await supabase.from("payments").update({ status: "failed" }).eq("id", payment.id);
+    return json({ error: "platega_unreachable", detail: String(err) }, 502);
+  }
   const data = await res.json().catch(() => null);
   if (!res.ok || !data?.url || !data?.transactionId) {
     await supabase.from("payments").update({ status: "failed" }).eq("id", payment.id);
-    return json({ error: "platega_error", detail: data }, 502);
+    return json({ error: "platega_error", status: res.status, detail: data }, 502);
   }
 
   // The callback only ever sends this transaction ID back, never our own
